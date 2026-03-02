@@ -7,6 +7,33 @@ import { MessageBubble } from './message-bubble';
 import { ThreadComposer } from './thread-composer';
 import { TypingIndicator } from './typing-indicator';
 import { Inbox } from 'lucide-react';
+import type { TimelineMessage } from '@/types/inbox';
+
+function formatDaySeparator(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+
+  // Reset to midnight for comparison
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffMs = today.getTime() - target.getTime();
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) {
+    return date.toLocaleDateString('en-US', { weekday: 'long' });
+  }
+
+  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function getDateKey(msg: TimelineMessage): string {
+  const raw = msg.date_created || msg.created_at;
+  if (!raw) return '';
+  const d = new Date(raw);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 export function ThreadPanel() {
   const {
@@ -141,9 +168,26 @@ export function ThreadPanel() {
           </div>
         ) : (
           <div className="space-y-2">
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id || msg.twilio_message_sid || msg.index} message={msg} />
-            ))}
+            {messages.map((msg, idx) => {
+              const currentKey = getDateKey(msg);
+              const prevKey = idx > 0 ? getDateKey(messages[idx - 1]) : '';
+              const showSeparator = currentKey && currentKey !== prevKey;
+
+              return (
+                <div key={msg.id || msg.twilio_message_sid || msg.index}>
+                  {showSeparator && (
+                    <div className="flex items-center gap-3 py-3">
+                      <div className="flex-1 border-t border-border" />
+                      <span className="text-[11px] font-medium text-muted-foreground">
+                        {formatDaySeparator(msg.date_created || msg.created_at || '')}
+                      </span>
+                      <div className="flex-1 border-t border-border" />
+                    </div>
+                  )}
+                  <MessageBubble message={msg} />
+                </div>
+              );
+            })}
           </div>
         )}
 
