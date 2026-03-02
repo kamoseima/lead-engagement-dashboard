@@ -1,0 +1,119 @@
+/**
+ * Comms Platform Tenant Callback Webhook
+ *
+ * POST /api/v1/webhooks/comms
+ *
+ * Receives real-time events from the comms platform:
+ * - message.received  — inbound email/SMS/WhatsApp
+ * - message.sent       — outbound message accepted
+ * - message.delivered  — outbound message delivered
+ * - message.failed     — outbound message failed
+ * - message.bounced    — email bounced
+ *
+ * Security:
+ * - HMAC-SHA256 signature verification via X-Webhook-Signature header
+ * - Secret must match COMMS_WEBHOOK_SECRET env var
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { createHmac, timingSafeEqual } from 'crypto';
+
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+const WEBHOOK_SECRET = process.env.COMMS_WEBHOOK_SECRET ?? '';
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+interface CommsWebhookPayload {
+  event: string;
+  timestamp: string;
+  message: {
+    id: string;
+    provider_message_id: string;
+    channel: 'email' | 'sms' | 'whatsapp';
+    provider: 'twilio' | 'sendgrid';
+    recipient: string;
+    status: string;
+    customer_id?: string;
+    conversation_id?: string;
+    contact_conversation_id?: string;
+  };
+  conversation?: {
+    id: string;
+    contact_conversation_id: string;
+    status: string;
+    created: boolean;
+    reopened: boolean;
+  };
+  incoming?: {
+    from: string;
+    body: string;
+    media?: Array<{ url: string; contentType: string }>;
+  };
+  error?: {
+    code?: string;
+    message?: string;
+    type?: string;
+  };
+}
+
+// ============================================================================
+// SIGNATURE VERIFICATION
+// ============================================================================
+
+function verifySignature(payload: string, signature: string, secret: string): boolean {
+  if (!signature || !secret) return false;
+
+  const expected = createHmac('sha256', secret).update(payload).digest('hex');
+
+  if (expected.length !== signature.length) return false;
+
+  try {
+    return timingSafeEqual(Buffer.from(expected, 'utf-8'), Buffer.from(signature, 'utf-8'));
+  } catch {
+    return false;
+  }
+}
+
+// ============================================================================
+// POST HANDLER
+// ============================================================================
+
+export async function POST(request: NextRequest) {
+  try {
+    // Read raw body for signature verification
+    const rawBody = await request.text();
+
+    // Verify HMAC signature if secret is configured
+    if (WEBHOOK_SECRET) {
+      const signature = request.headers.get('x-webhook-signature');
+      if (!signature || !verifySignature(rawBody, signature, WEBHOOK_SECRET)) {
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      }
+    }
+
+    const payload: CommsWebhookPayload = JSON.parse(rawBody);
+
+    // Log for visibility (Vercel function logs)
+    console.log(`[webhook] ${payload.event}`, {
+      messageId: payload.message.id,
+      channel: payload.message.channel,
+      status: payload.message.status,
+      ...(payload.incoming && { from: payload.incoming.from }),
+      ...(payload.conversation && {
+        conversationId: payload.conversation.id,
+        created: payload.conversation.created,
+      }),
+    });
+
+    // Acknowledge immediately — the comms platform expects 200
+    return NextResponse.json({ received: true }, { status: 200 });
+  } catch (error) {
+    console.error('[webhook] Failed to process comms callback', error);
+    return NextResponse.json({ received: true, error: 'Processing error' }, { status: 200 });
+  }
+}
