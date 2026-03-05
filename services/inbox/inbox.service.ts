@@ -318,7 +318,7 @@ export async function updateConversationStatus(
   status: ConversationStatus
 ): Promise<StepResult<Conversation>> {
   return platformApi<Conversation>(
-    `${orgPath(orgId)}/conversations/${conversationId}/status`,
+    `${orgPath(orgId)}/conversations/${conversationId}`,
     { method: 'PATCH', body: { status } }
   );
 }
@@ -329,7 +329,7 @@ export async function updateConversationPriority(
   priority: ConversationPriority
 ): Promise<StepResult<Conversation>> {
   return platformApi<Conversation>(
-    `${orgPath(orgId)}/conversations/${conversationId}/priority`,
+    `${orgPath(orgId)}/conversations/${conversationId}`,
     { method: 'PATCH', body: { priority } }
   );
 }

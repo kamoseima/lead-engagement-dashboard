@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/roles';
-import { getTimeline, sendMessage } from '@/services/inbox/inbox.service';
+import { getTimeline, sendMessage, updateConversationStatus } from '@/services/inbox/inbox.service';
 import { toApiResponse, mapErrorToHttpStatus, failure } from '@/lib/shared/result';
 
 export async function GET(
@@ -60,6 +60,9 @@ export async function POST(
     if (!result.success) {
       return NextResponse.json(toApiResponse(result), { status: mapErrorToHttpStatus(result.error.code) });
     }
+
+    // Update conversation status to waiting_on_customer after agent sends a message
+    await updateConversationStatus(userResult.data.org_id, conversationId, 'waiting_on_customer').catch(() => {});
 
     return NextResponse.json(toApiResponse(result), { status: 201 });
   } catch {
