@@ -10,9 +10,13 @@ interface MessageBubbleProps {
 }
 
 function isInbound(msg: TimelineMessage): boolean {
-  if (!msg.author) return true;
-  // If author looks like a phone number or email, it's the contact (inbound)
-  if (msg.author.startsWith('+') || msg.author.includes('@')) return true;
+  const author = msg.author?.trim();
+  if (!author) return true;
+  // Phone number, whatsapp: prefix, or email → contact (inbound)
+  if (author.startsWith('+') || author.startsWith('whatsapp:') || author.includes('@')) return true;
+  // Explicit "contact" label from fallback timeline
+  if (author === 'contact') return true;
+  // Known outbound authors: agent names, system, etc.
   return false;
 }
 
