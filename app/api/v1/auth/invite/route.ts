@@ -46,7 +46,10 @@ export async function POST(request: NextRequest) {
 
     const role: UserRole = body.role === 'admin' ? 'admin' : 'agent';
     const adminClient = createAdminClient();
-    const redirectTo = `${request.nextUrl.origin}/auth/accept-invite`;
+    // Use explicit APP_URL env var so invite links always point to the live site,
+    // not localhost (request.nextUrl.origin resolves to localhost on Vercel infra)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    const redirectTo = `${appUrl}/auth/accept-invite`;
 
     // Generate invite link without sending email
     const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
