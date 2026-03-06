@@ -2,13 +2,15 @@
  * POST /api/v1/auth/invite
  *
  * Admin-only endpoint to invite a new user via email.
- * Creates the auth user and dashboard_users record.
+ * Creates the auth user, generates an invite link, and sends
+ * a custom HTML email via SendGrid.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { failure, mapErrorToHttpStatus, toApiResponse, success } from '@/lib/shared/result';
+import { sendInviteEmail } from '@/lib/email/send-invite-email';
 import type { UserRole } from '@/types/database';
 
 export async function POST(request: NextRequest) {
@@ -43,33 +45,45 @@ export async function POST(request: NextRequest) {
     }
 
     const role: UserRole = body.role === 'admin' ? 'admin' : 'agent';
-
-    // Invite user via Supabase Admin API
     const adminClient = createAdminClient();
+    const redirectTo = `${request.nextUrl.origin}/auth/accept-invite`;
 
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-      body.email,
-      {
+    // Generate invite link without sending email
+    const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+      type: 'invite',
+      email: body.email,
+      options: {
         data: { role, org_id: caller.org_id, invited_by: userId },
-        redirectTo: `${request.nextUrl.origin}/auth/accept-invite`,
-      }
-    );
+        redirectTo,
+      },
+    });
 
-    if (inviteError) {
-      const result = failure('PROVIDER_ERROR', inviteError.message);
+    if (linkError) {
+      const result = failure('PROVIDER_ERROR', linkError.message);
       return NextResponse.json(toApiResponse(result), { status: mapErrorToHttpStatus('PROVIDER_ERROR') });
     }
 
     // Create dashboard_users record
-    if (inviteData.user) {
+    if (linkData.user) {
       await adminClient.from('dashboard_users').insert({
-        id: inviteData.user.id,
+        id: linkData.user.id,
         email: body.email,
         role,
         org_id: caller.org_id,
         invited_by: userId,
       });
     }
+
+    // Send custom invite email
+    const inviterName = caller.display_name || caller.email;
+    const inviteUrl = linkData.properties.action_link;
+
+    await sendInviteEmail({
+      to: body.email,
+      inviteUrl,
+      inviterName,
+      role,
+    });
 
     return NextResponse.json(
       toApiResponse(success({ email: body.email, role })),
