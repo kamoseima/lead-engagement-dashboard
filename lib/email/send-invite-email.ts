@@ -10,7 +10,7 @@ import sgMail from '@sendgrid/mail';
 // Trim to guard against trailing newlines injected by shell echo when setting env vars
 const SENDGRID_API_KEY = (process.env.SENDGRID_API_KEY ?? '').trim();
 const FROM_EMAIL = (process.env.SENDGRID_FROM_EMAIL ?? 'noreply@apextech.group').trim();
-const FROM_NAME = (process.env.SENDGRID_FROM_NAME ?? 'Lead Engage').trim();
+const FROM_NAME = (process.env.SENDGRID_FROM_NAME ?? 'FibreCompare Lead Engagement').trim();
 
 interface SendInviteEmailParams {
   to: string;
@@ -34,8 +34,8 @@ export async function sendInviteEmail(params: SendInviteEmailParams): Promise<vo
   await sgMail.send({
     to,
     from: { email: FROM_EMAIL, name: FROM_NAME },
-    subject: `You've been invited to Lead Engage`,
-    text: `${inviterName} has invited you to join Lead Engage as ${roleBadge === 'Administrator' ? 'an' : 'a'} ${roleBadge}. Set up your account: ${inviteUrl}`,
+    subject: `You've been invited to FibreCompare Lead Engagement`,
+    text: `${inviterName} has invited you to join FibreCompare Lead Engagement as ${roleBadge === 'Administrator' ? 'an' : 'a'} ${roleBadge}. Set up your account: ${inviteUrl}`,
     html,
   });
 }
@@ -48,7 +48,7 @@ function buildInviteHtml(params: { inviteUrl: string; inviterName: string; roleB
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>You're invited to Lead Engage</title>
+  <title>You're invited to FibreCompare Lead Engagement</title>
 </head>
 <body style="margin:0;padding:0;background-color:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#09090b;padding:40px 20px;">
@@ -61,7 +61,7 @@ function buildInviteHtml(params: { inviteUrl: string; inviterName: string; roleB
               <table role="presentation" cellpadding="0" cellspacing="0">
                 <tr>
                   <td style="font-size:24px;color:#facc15;padding-right:8px;">&#9889;</td>
-                  <td style="font-size:22px;font-weight:700;color:#fafafa;letter-spacing:-0.5px;">Lead Engage</td>
+                  <td style="font-size:22px;font-weight:700;color:#fafafa;letter-spacing:-0.5px;">FibreCompare Lead Engagement</td>
                 </tr>
               </table>
             </td>
@@ -80,7 +80,7 @@ function buildInviteHtml(params: { inviteUrl: string; inviterName: string; roleB
                 <tr>
                   <td style="font-size:15px;color:#a1a1aa;line-height:1.6;padding-bottom:24px;">
                     <strong style="color:#fafafa;">${inviterName}</strong> has invited you to join
-                    Lead Engage as ${roleBadge === 'Administrator' ? 'an' : 'a'}
+                    FibreCompare Lead Engagement as ${roleBadge === 'Administrator' ? 'an' : 'a'}
                   </td>
                 </tr>
               </table>
@@ -122,7 +122,7 @@ function buildInviteHtml(params: { inviteUrl: string; inviterName: string; roleB
           <tr>
             <td align="center" style="padding-top:24px;">
               <p style="margin:0;font-size:12px;color:#52525b;">
-                Lead Engage &middot; Powered by Apex Tech
+                FibreCompare Lead Engagement &middot; Powered by Apex Tech
               </p>
             </td>
           </tr>
