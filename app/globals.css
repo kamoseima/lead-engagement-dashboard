@@ -4,90 +4,102 @@
 
 @layer base {
   /*
-   * FibreCompare Engage — Dark mission-control theme
-   * Ported from the prototype's color system
+   * FibreCompare Lead Engage — Professional Design System
+   * Brand palette: Orange #E85525 · Blue #4B5EDB
+   * Light: clean white / cool-gray  |  Dark: deep navy-black / elevated surfaces
    */
+
   :root {
-    --background: 0 0% 100%;
-    --foreground: 210 20% 10%;
-    --card: 0 0% 100%;
-    --card-foreground: 210 20% 10%;
+    /* ── Light mode ─────────────────────────────────── */
+    --background: 220 25% 96%;         /* #F1F3F9 cool-white page */
+    --foreground: 224 35% 10%;         /* #111623 near-black text */
+    --card: 0 0% 100%;                 /* #FFFFFF pure card */
+    --card-foreground: 224 35% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 210 20% 10%;
-    --primary: 187 85% 53%;
-    --primary-foreground: 210 40% 6%;
-    --secondary: 210 20% 96%;
-    --secondary-foreground: 210 20% 10%;
-    --muted: 210 20% 96%;
-    --muted-foreground: 210 15% 50%;
-    --accent: 187 85% 53%;
-    --accent-foreground: 210 40% 6%;
-    --destructive: 0 72% 68%;
-    --destructive-foreground: 0 0% 98%;
-    --success: 160 60% 52%;
-    --success-foreground: 160 60% 10%;
-    --warning: 43 96% 56%;
-    --warning-foreground: 43 96% 10%;
-    --border: 210 15% 90%;
-    --input: 210 15% 90%;
-    --ring: 187 85% 53%;
-    --chart-1: 187 85% 53%;
-    --chart-2: 160 60% 52%;
-    --chart-3: 43 96% 56%;
-    --chart-4: 263 70% 76%;
-    --chart-5: 0 72% 68%;
-    --radius: 0.75rem;
+    --popover-foreground: 224 35% 10%;
+
+    /* FibreCompare orange as the action colour */
+    --primary: 16 83% 52%;             /* #E85525 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 233 62% 57%;          /* #4B5EDB blue */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 22% 91%;              /* #E3E7F0 */
+    --muted-foreground: 220 14% 46%;   /* #677090 */
+
+    --accent: 16 83% 52%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;          /* #D43030 */
+    --destructive-foreground: 0 0% 100%;
+    --success: 158 64% 38%;            /* #22A270 */
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 48%;             /* #F09B14 */
+    --warning-foreground: 0 0% 100%;
+
+    --border: 220 18% 87%;             /* #D8DCEB */
+    --input: 220 18% 87%;
+    --ring: 16 83% 52%;
+
+    --chart-1: 16 83% 52%;
+    --chart-2: 233 62% 57%;
+    --chart-3: 158 64% 38%;
+    --chart-4: 38 92% 48%;
+    --chart-5: 280 65% 58%;
+
+    --radius: 0.5rem;                  /* crisper, enterprise radius */
   }
 
   .dark {
-    /* Dark mode — matches prototype's mission-control aesthetic */
-    --background: 216 33% 5%;       /* #0A0D12 */
-    --foreground: 213 25% 92%;      /* #E8ECF1 */
-    --card: 214 30% 9%;             /* #11161E */
-    --card-foreground: 213 25% 92%; /* #E8ECF1 */
-    --popover: 214 30% 9%;
-    --popover-foreground: 213 25% 92%;
-    --primary: 187 85% 53%;         /* #22D3EE (cyan accent) */
-    --primary-foreground: 216 33% 5%;
-    --secondary: 213 26% 14%;       /* #1A2130 */
-    --secondary-foreground: 213 25% 92%;
-    --muted: 213 26% 14%;           /* #1A2130 */
-    --muted-foreground: 210 18% 55%; /* #8899AA */
-    --accent: 187 85% 53%;          /* #22D3EE */
-    --accent-foreground: 216 33% 5%;
-    --destructive: 0 90% 68%;       /* #F87171 */
-    --destructive-foreground: 0 0% 98%;
-    --success: 160 60% 52%;         /* #34D399 */
-    --success-foreground: 160 60% 10%;
-    --warning: 43 96% 56%;          /* #FBBF24 */
-    --warning-foreground: 43 96% 10%;
-    --border: 0 0% 100% / 0.06;
-    --input: 0 0% 100% / 0.06;
-    --ring: 187 85% 53%;
-    --chart-1: 187 85% 53%;
-    --chart-2: 160 60% 52%;
-    --chart-3: 43 96% 56%;
-    --chart-4: 263 70% 76%;
-    --chart-5: 0 72% 68%;
+    /* ── Dark mode ──────────────────────────────────── */
+    --background: 226 24% 6%;          /* #0C0F18 deep navy-black */
+    --foreground: 218 22% 92%;         /* #E3E8F2 */
+    --card: 225 24% 9%;                /* #121620 elevated surface */
+    --card-foreground: 218 22% 92%;
+    --popover: 225 24% 9%;
+    --popover-foreground: 218 22% 92%;
 
-    /* Extended tokens for mission-control UI */
-    --surface: 214 30% 9%;          /* #11161E */
-    --elevated: 213 26% 14%;       /* #1A2130 */
-    --hover: 212 28% 17%;          /* #1E2A3B */
-    --border-active: 0 0% 100% / 0.14;
-    --text-dim: 207 19% 37%;       /* #4E6070 */
-    --accent-glow: 187 85% 53% / 0.12;
-    --success-glow: 160 60% 52% / 0.12;
-    --warning-glow: 43 96% 56% / 0.12;
-    --error-glow: 0 90% 68% / 0.12;
-    --inbound: 263 70% 76%;        /* #A78BFA */
-    --outbound: 187 85% 53%;       /* #22D3EE */
+    --primary: 16 83% 52%;             /* #E85525 FibreCompare orange */
+    --primary-foreground: 0 0% 100%;
 
-    /* Channel-specific colors */
-    --channel-whatsapp: 142 71% 45%;   /* #25D366 */
-    --channel-sms: 217 91% 60%;        /* #3B82F6 */
-    --channel-email: 263 70% 50%;      /* #8B5CF6 */
-    --channel-voice: 25 95% 53%;       /* #F97316 */
+    --secondary: 233 62% 57%;          /* #4B5EDB blue */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 225 24% 13%;              /* #181D2C */
+    --muted-foreground: 218 16% 52%;   /* #7A87A2 */
+
+    --accent: 16 83% 52%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 82% 64%;          /* #F26A6A */
+    --destructive-foreground: 0 0% 100%;
+    --success: 158 64% 44%;            /* #29B87E */
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 54%;             /* #F5A623 */
+    --warning-foreground: 0 0% 100%;
+
+    --border: 225 24% 14%;             /* #1A1F30 — very subtle */
+    --input: 225 24% 14%;
+    --ring: 16 83% 52%;
+
+    --chart-1: 16 83% 52%;
+    --chart-2: 233 62% 57%;
+    --chart-3: 158 64% 44%;
+    --chart-4: 38 92% 54%;
+    --chart-5: 280 65% 65%;
+
+    /* Extended dark tokens */
+    --surface: 225 24% 9%;
+    --elevated: 225 24% 13%;
+    --border-subtle: 0 0% 100% / 0.05;
+    --border-active: 0 0% 100% / 0.11;
+
+    /* Channel colours */
+    --channel-whatsapp: 142 71% 45%;
+    --channel-sms: 217 91% 60%;
+    --channel-email: 263 70% 50%;
+    --channel-voice: 25 95% 53%;
   }
 }
 
@@ -97,21 +109,40 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-/* Scrollbar styling */
+/* ── Light-mode card elevation ─────────────────────── */
+:root:not(.dark) .border {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+}
+
+/* ── Refined scrollbar ─────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 3px;
+  background: hsl(var(--muted-foreground) / 0.22);
+  border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+  background: hsl(var(--muted-foreground) / 0.42);
+}
+
+/* ── Smooth theme transition ───────────────────────── */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color;
+  transition-duration: 120ms;
+  transition-timing-function: ease;
+}
+/* Reset for transforms/opacity so animations stay snappy */
+[class*="animate-"], [class*="transition-"] {
+  transition-property: all;
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import {
   LayoutDashboard,
   Inbox,
@@ -15,6 +16,8 @@ import {
   Zap,
   PanelLeftClose,
   PanelLeftOpen,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types/database';
@@ -49,6 +52,7 @@ interface SidebarProps {
 export function Sidebar({ userRole, userEmail, displayName }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
 
   // Load collapsed state from localStorage on mount
@@ -83,26 +87,32 @@ export function Sidebar({ userRole, userEmail, displayName }: SidebarProps) {
       )}
     >
       {/* Logo */}
-      <div className="flex items-center border-b border-border px-3 py-4">
+      <div className="flex items-center border-b border-border px-3 py-[14px]">
         {collapsed ? (
           <div className="flex w-full justify-center">
-            <Zap className="h-5 w-5 text-primary" />
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary">
+              <Zap className="h-4 w-4 text-white" />
+            </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2.5 px-2">
-            <Zap className="h-5 w-5 shrink-0 text-primary" />
-            <span className="text-sm font-bold tracking-tight">
-              Lead Engage
-            </span>
-            <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-primary">
-              Beta
-            </span>
+          <div className="flex items-center gap-2.5 px-1">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary">
+              <Zap className="h-4 w-4 text-white" />
+            </div>
+            <div className="flex flex-col leading-none">
+              <span className="text-[11px] font-semibold tracking-wide text-muted-foreground/70 uppercase">
+                FibreCompare
+              </span>
+              <span className="text-sm font-bold tracking-tight">
+                Lead Engage
+              </span>
+            </div>
           </div>
         )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-2 py-4">
+      <nav className="flex-1 space-y-0.5 px-2 py-4">
         {visibleItems.map(item => {
           const isActive =
             item.href === '/dashboard'
@@ -116,12 +126,12 @@ export function Sidebar({ userRole, userEmail, displayName }: SidebarProps) {
               href={item.href}
               title={collapsed ? item.label : undefined}
               className={cn(
-                'flex items-center rounded-lg text-sm font-medium transition-colors',
+                'flex items-center rounded-md text-sm font-medium transition-colors',
                 collapsed
-                  ? 'justify-center px-2 py-2'
+                  ? 'justify-center px-2 py-2.5'
                   : 'gap-3 px-3 py-2',
                 isActive
-                  ? 'bg-primary/10 text-primary'
+                  ? 'bg-primary text-white'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
             >
@@ -132,12 +142,30 @@ export function Sidebar({ userRole, userEmail, displayName }: SidebarProps) {
         })}
       </nav>
 
-      {/* Collapse toggle */}
-      <div className="px-2 py-1">
+      {/* Bottom controls */}
+      <div className="px-2 py-2 space-y-0.5">
+        {/* Theme toggle */}
+        <button
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          className={cn(
+            'flex w-full items-center rounded-md py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+            collapsed ? 'justify-center px-2' : 'gap-3 px-3'
+          )}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? (
+            <Sun className="h-4 w-4 shrink-0" />
+          ) : (
+            <Moon className="h-4 w-4 shrink-0" />
+          )}
+          {!collapsed && (theme === 'dark' ? 'Light mode' : 'Dark mode')}
+        </button>
+
+        {/* Collapse toggle */}
         <button
           onClick={toggleCollapsed}
           className={cn(
-            'flex w-full items-center rounded-lg py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+            'flex w-full items-center rounded-md py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
             collapsed ? 'justify-center px-2' : 'gap-3 px-3'
           )}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -157,7 +185,7 @@ export function Sidebar({ userRole, userEmail, displayName }: SidebarProps) {
       <div className="border-t border-border px-2 py-3">
         {collapsed ? (
           <div className="flex flex-col items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
               {(displayName || userEmail)[0].toUpperCase()}
             </div>
             <button
@@ -169,12 +197,15 @@ export function Sidebar({ userRole, userEmail, displayName }: SidebarProps) {
             </button>
           </div>
         ) : (
-          <div className="flex items-center justify-between rounded-lg px-3 py-2">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">
+          <div className="flex items-center gap-2 rounded-md px-2 py-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
+              {(displayName || userEmail)[0].toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold">
                 {displayName || userEmail.split('@')[0]}
               </p>
-              <p className="truncate text-xs text-muted-foreground">
+              <p className="truncate text-[11px] capitalize text-muted-foreground">
                 {userRole}
               </p>
             </div>
@@ -183,7 +214,7 @@ export function Sidebar({ userRole, userEmail, displayName }: SidebarProps) {
               className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               title="Sign out"
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-3.5 w-3.5" />
             </button>
           </div>
         )}
