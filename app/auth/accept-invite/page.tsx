@@ -170,7 +170,7 @@ function AcceptInviteForm() {
                     {error}
                   </p>
                 )}
-                <Button type="submit" className="w-full" disabled={isLoading || !!error}>
+                <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Setting up...' : 'Complete Setup'}
                 </Button>
               </div>
