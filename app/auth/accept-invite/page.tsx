@@ -33,7 +33,7 @@ function AcceptInviteForm() {
   useEffect(() => {
     const supabase = createClient();
 
-    // PKCE flow: ?code= in query string
+    // 1. PKCE flow: ?code= in query string
     const code = searchParams.get('code');
     if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
@@ -43,18 +43,30 @@ function AcceptInviteForm() {
       return;
     }
 
-    // Implicit flow: #access_token= in hash — supabase client detects automatically.
-    // Listen for the resulting SIGNED_IN event.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
+    // 2. OTP / token_hash flow: ?token_hash=xxx&type=invite
+    const tokenHash = searchParams.get('token_hash');
+    if (tokenHash) {
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'invite' }).then(({ error }) => {
+        if (error) setError(error.message);
         setIsExchanging(false);
-      } else if (event === 'INITIAL_SESSION') {
-        if (session) {
-          setIsExchanging(false);
-        } else {
-          setError('Invalid or expired invite link.');
-          setIsExchanging(false);
-        }
+      });
+      return;
+    }
+
+    // 3. Implicit flow: #access_token= in URL hash (client auto-processes it).
+    //    INITIAL_SESSION fires with null before the hash is parsed — only treat
+    //    null as an error when there's definitely no hash token.
+    const hasHashToken = typeof window !== 'undefined' && window.location.hash.includes('access_token');
+
+    if (!hasHashToken) {
+      setError('Invalid or expired invite link.');
+      setIsExchanging(false);
+      return;
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+        setIsExchanging(false);
       }
     });
 
