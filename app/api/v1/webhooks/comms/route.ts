@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
       // For button clicks / list selections, prefer the interactive reply title over body.
       // Quick-reply buttons use buttonText (display label), while interactive buttons use buttonReply.title.
       // The body field often contains the button payload ID (e.g. "yes_plans") instead of the title.
-      const body =
+      const rawText =
         payload.incoming.whatsapp?.buttonReply?.title ||
         payload.incoming.whatsapp?.buttonText ||
         payload.incoming.whatsapp?.listReply?.title ||
@@ -144,6 +144,9 @@ export async function POST(request: NextRequest) {
         payload.templateResponse?.listReply?.title ||
         payload.incoming.body ||
         '';
+      // Twilio sends form-urlencoded data where spaces become '+'.
+      // Some fields may retain literal '+' signs if not fully decoded upstream.
+      const body = rawText.replace(/\+/g, ' ');
 
       console.log(`[webhook] Inbound for flow engine: event=${payload.event} from=${fromPhone} body="${body.substring(0, 60)}"`);
 
