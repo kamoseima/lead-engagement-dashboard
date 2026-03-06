@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,18 @@ import { Label } from '@/components/ui/label';
 import { Zap } from 'lucide-react';
 
 export default function AcceptInvitePage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen w-full items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Verifying invite link...</p>
+      </div>
+    }>
+      <AcceptInviteForm />
+    </Suspense>
+  );
+}
+
+function AcceptInviteForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -76,6 +88,7 @@ export default function AcceptInvitePage() {
   }
 
   return (
+
     <div className="flex min-h-screen w-full items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm">
         <div className="flex flex-col gap-6">
