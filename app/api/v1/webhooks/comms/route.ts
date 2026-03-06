@@ -56,6 +56,16 @@ interface CommsWebhookPayload {
     from: string;
     body: string;
     media?: Array<{ url: string; contentType: string }>;
+    whatsapp?: {
+      buttonReply?: { id: string; title: string };
+      buttonPayload?: string;
+      listReply?: { id: string; title: string; description?: string };
+    };
+  };
+  templateResponse?: {
+    responseType: 'button' | 'list' | 'flow';
+    buttonReply?: { id: string; title: string };
+    listReply?: { id: string; title: string; description?: string };
   };
   error?: {
     code?: string;
@@ -113,13 +123,27 @@ export async function POST(request: NextRequest) {
       }),
     });
 
-    // Process inbound WhatsApp messages for active test runs (flow engine)
-    if (payload.event === 'message.received' && payload.incoming?.body) {
-      // Strip whatsapp: prefix to get raw phone number
+    // Process inbound WhatsApp messages for active test runs (flow engine).
+    // The platform fires different event types depending on how the user replied:
+    //   - message.received        — plain text reply
+    //   - template.button_clicked — quick-reply or CTA button tap
+    //   - template.list_selected  — list-picker item selection
+    const inboundEvents = ['message.received', 'template.button_clicked', 'template.list_selected'];
+    if (inboundEvents.includes(payload.event) && payload.incoming) {
       const fromPhone = (payload.incoming.from || '').replace(/^whatsapp:/, '');
-      const body = payload.incoming.body;
 
-      if (fromPhone) {
+      // For button clicks / list selections, prefer the interactive reply title over body
+      const body =
+        payload.incoming.whatsapp?.buttonReply?.title ||
+        payload.incoming.whatsapp?.listReply?.title ||
+        payload.templateResponse?.buttonReply?.title ||
+        payload.templateResponse?.listReply?.title ||
+        payload.incoming.body ||
+        '';
+
+      console.log(`[webhook] Inbound for flow engine: event=${payload.event} from=${fromPhone} body="${body.substring(0, 60)}"`);
+
+      if (fromPhone && body) {
         try {
           await handleInboundForTests(fromPhone, body);
         } catch (err) {
