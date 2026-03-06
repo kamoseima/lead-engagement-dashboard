@@ -110,7 +110,7 @@ function buildInviteHtml(params: { inviteUrl: string; inviterName: string; roleB
                 <tr>
                   <td style="border-top:1px solid #27272a;padding-top:20px;">
                     <p style="margin:0;font-size:13px;color:#71717a;line-height:1.5;">
-                      This invitation link will expire in 24 hours. If you didn't expect this email, you can safely ignore it.
+                      This invitation link will expire in 3 days. If you didn't expect this email, you can safely ignore it.
                     </p>
                   </td>
                 </tr>
