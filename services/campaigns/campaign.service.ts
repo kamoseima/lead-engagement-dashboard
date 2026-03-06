@@ -68,7 +68,7 @@ export async function createCampaign(
   const supabase = await createClient();
 
   const scheduleType = input.schedule_type || 'immediate';
-  const status = scheduleType === 'immediate' ? 'active' : 'scheduled';
+  const status = scheduleType === 'immediate' ? 'sending' : 'scheduled';
 
   const { data, error } = await supabase
     .from('campaigns')
