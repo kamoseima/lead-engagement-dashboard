@@ -88,7 +88,7 @@ export async function createCampaign(
       sends_per_day: input.sends_per_day || 1,
       send_times: input.send_times || [],
       recurrence_end_at: input.recurrence_end_at || null,
-      config: input.config || {},
+      config: { ...input.config, ...(input.content_sid ? { content_sid: input.content_sid } : {}) },
       created_by: userId,
     })
     .select()
