@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,23 @@ export default function AcceptInvitePage() {
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExchanging, setIsExchanging] = useState(true);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const code = searchParams.get('code');
+    if (!code) {
+      setError('Invalid or expired invite link.');
+      setIsExchanging(false);
+      return;
+    }
+    const supabase = createClient();
+    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+      if (error) setError(error.message);
+      setIsExchanging(false);
+    });
+  }, [searchParams]);
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +66,14 @@ export default function AcceptInvitePage() {
       setIsLoading(false);
     }
   };
+
+  if (isExchanging) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Verifying invite link...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen w-full items-center justify-center bg-background p-6">
@@ -104,7 +128,7 @@ export default function AcceptInvitePage() {
                     {error}
                   </p>
                 )}
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full" disabled={isLoading || !!error}>
                   {isLoading ? 'Setting up...' : 'Complete Setup'}
                 </Button>
               </div>
