@@ -5,19 +5,12 @@
  * Finds all due scheduled campaigns and dispatches their messages.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendCampaignMessage } from '@/services/campaigns/campaign.service';
 import type { Campaign } from '@/types/database';
 
-export async function GET(request: NextRequest) {
-  // Verify cron secret (Vercel sends this automatically)
-  const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export async function GET(_request: NextRequest) {
   const supabase = createAdminClient();
   const now = new Date().toISOString();
 
