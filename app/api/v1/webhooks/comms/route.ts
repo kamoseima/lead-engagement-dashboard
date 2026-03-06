@@ -59,6 +59,7 @@ interface CommsWebhookPayload {
     whatsapp?: {
       buttonReply?: { id: string; title: string };
       buttonPayload?: string;
+      buttonText?: string;
       listReply?: { id: string; title: string; description?: string };
     };
   };
@@ -132,9 +133,12 @@ export async function POST(request: NextRequest) {
     if (inboundEvents.includes(payload.event) && payload.incoming) {
       const fromPhone = (payload.incoming.from || '').replace(/^whatsapp:/, '');
 
-      // For button clicks / list selections, prefer the interactive reply title over body
+      // For button clicks / list selections, prefer the interactive reply title over body.
+      // Quick-reply buttons use buttonText (display label), while interactive buttons use buttonReply.title.
+      // The body field often contains the button payload ID (e.g. "yes_plans") instead of the title.
       const body =
         payload.incoming.whatsapp?.buttonReply?.title ||
+        payload.incoming.whatsapp?.buttonText ||
         payload.incoming.whatsapp?.listReply?.title ||
         payload.templateResponse?.buttonReply?.title ||
         payload.templateResponse?.listReply?.title ||
