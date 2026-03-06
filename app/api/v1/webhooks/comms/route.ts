@@ -19,7 +19,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { processInboundForTestRun } from '@/services/testing/flow-engine.service';
-import type { TestRun } from '@/types/database';
+import { recordActivity } from '@/services/leads/lead.service';
+import type { TestRun, WebhookProcessingResult, ActivityType } from '@/types/database';
 
 // ============================================================================
 // CONFIGURATION
@@ -98,19 +99,47 @@ function verifySignature(payload: string, signature: string, secret: string): bo
 // ============================================================================
 
 export async function POST(request: NextRequest) {
+  const sourceIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || request.headers.get('x-real-ip')
+    || 'unknown';
+
   try {
     // Read raw body for signature verification
     const rawBody = await request.text();
 
     // Verify HMAC signature if secret is configured
+    let signatureValid = !WEBHOOK_SECRET; // true if no secret configured
     if (WEBHOOK_SECRET) {
       const signature = request.headers.get('x-webhook-signature');
-      if (!signature || !verifySignature(rawBody, signature, WEBHOOK_SECRET)) {
+      signatureValid = !!signature && verifySignature(rawBody, signature, WEBHOOK_SECRET);
+      if (!signatureValid) {
+        logWebhookEvent({
+          org_id: null,
+          event_type: 'unknown',
+          channel: null,
+          payload: {},
+          source_ip: sourceIp,
+          signature_valid: false,
+          processing_result: 'error',
+          error: 'Invalid HMAC signature',
+        });
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
       }
     }
 
     const payload: CommsWebhookPayload = JSON.parse(rawBody);
+
+    // Fire-and-forget: log webhook event to database
+    logWebhookEvent({
+      org_id: null,
+      event_type: payload.event,
+      channel: payload.message.channel,
+      payload: payload as unknown as Record<string, unknown>,
+      source_ip: sourceIp,
+      signature_valid: signatureValid,
+      processing_result: 'success',
+      error: null,
+    });
 
     // Log for visibility (Vercel function logs)
     console.log(`[webhook] ${payload.event}`, {
@@ -159,12 +188,143 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Track lead activity for scoring (fire-and-forget)
+    trackLeadActivity(payload);
+
     // Acknowledge immediately — the comms platform expects 200
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (error) {
     console.error('[webhook] Failed to process comms callback', error);
     return NextResponse.json({ received: true, error: 'Processing error' }, { status: 200 });
   }
+}
+
+// ============================================================================
+// LEAD ACTIVITY TRACKING — Fire-and-forget scoring events
+// ============================================================================
+
+const EVENT_TO_ACTIVITY: Record<string, ActivityType> = {
+  'message.delivered': 'delivered',
+  'message.failed': 'failed',
+  'message.bounced': 'bounced',
+  'message.received': 'replied',
+  'template.button_clicked': 'clicked',
+  'template.list_selected': 'clicked',
+};
+
+function trackLeadActivity(payload: CommsWebhookPayload) {
+  const activityType = EVENT_TO_ACTIVITY[payload.event];
+  if (!activityType) return;
+
+  (async () => {
+    try {
+      const supabase = createAdminClient();
+      const phone = payload.incoming?.from?.replace(/^whatsapp:/, '')
+        || payload.message.recipient?.replace(/^whatsapp:/, '')
+        || '';
+      if (!phone) return;
+
+      // Resolve org_id from campaign_sends
+      let orgId: string | null = null;
+      if (payload.message.provider_message_id) {
+        const { data: send } = await supabase
+          .from('campaign_sends')
+          .select('org_id, campaign_id, lead_name')
+          .eq('provider_message_id', payload.message.provider_message_id)
+          .limit(1)
+          .maybeSingle();
+        if (send) {
+          orgId = send.org_id;
+          await recordActivity(
+            send.org_id,
+            phone,
+            activityType,
+            'campaign',
+            send.campaign_id,
+            send.lead_name || undefined
+          );
+          return;
+        }
+      }
+
+      // If we couldn't resolve via campaign_sends, try test_runs
+      const phoneVariants = [phone];
+      if (phone.startsWith('+')) phoneVariants.push(phone.slice(1));
+      else phoneVariants.push(`+${phone}`);
+
+      const { data: testRun } = await supabase
+        .from('test_runs')
+        .select('org_id, id, lead_name')
+        .in('lead_phone', phoneVariants)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (testRun) {
+        await recordActivity(
+          testRun.org_id,
+          phone,
+          activityType,
+          'test',
+          testRun.id,
+          testRun.lead_name || undefined
+        );
+      }
+    } catch (err) {
+      console.error('[webhook] Failed to track lead activity:', err);
+    }
+  })();
+}
+
+// ============================================================================
+// WEBHOOK EVENT LOGGING — Fire-and-forget database insert
+// ============================================================================
+
+interface WebhookEventInsert {
+  org_id: string | null;
+  event_type: string;
+  channel: string | null;
+  payload: Record<string, unknown>;
+  source_ip: string | null;
+  signature_valid: boolean;
+  processing_result: WebhookProcessingResult;
+  error: string | null;
+}
+
+function logWebhookEvent(event: WebhookEventInsert) {
+  // Fire-and-forget — don't await, swallow errors
+  (async () => {
+    try {
+      const supabase = createAdminClient();
+
+      // Attempt to resolve org_id from campaign_sends if we have a provider_message_id
+      let orgId = event.org_id;
+      const messageId = (event.payload as Record<string, unknown>)?.message &&
+        ((event.payload as Record<string, unknown>).message as Record<string, unknown>)?.provider_message_id;
+      if (!orgId && messageId) {
+        const { data: send } = await supabase
+          .from('campaign_sends')
+          .select('org_id')
+          .eq('provider_message_id', messageId as string)
+          .limit(1)
+          .maybeSingle();
+        if (send) orgId = send.org_id;
+      }
+
+      await supabase.from('webhook_events').insert({
+        org_id: orgId,
+        event_type: event.event_type,
+        channel: event.channel,
+        payload: event.payload,
+        source_ip: event.source_ip,
+        signature_valid: event.signature_valid,
+        processing_result: event.processing_result,
+        error: event.error,
+      });
+    } catch (err) {
+      console.error('[webhook-log] Failed to log event:', err);
+    }
+  })();
 }
 
 // ============================================================================

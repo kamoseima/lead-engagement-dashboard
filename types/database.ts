@@ -147,3 +147,55 @@ export interface TestRunMessage {
   timestamp: string;
   status?: string;
 }
+
+// Lead Scoring & Pipeline
+
+export type LeadSegment = 'hot' | 'warm' | 'cold' | 'unresponsive';
+export type LeadPipelineStage = 'new' | 'contacted' | 'engaged' | 'qualified' | 'converted' | 'lost';
+export type ActivityType = 'sent' | 'delivered' | 'replied' | 'failed' | 'bounced' | 'clicked';
+export type ActivitySource = 'campaign' | 'test' | 'manual';
+
+export interface Lead {
+  id: string;
+  org_id: string;
+  name: string | null;
+  phone: string;
+  email: string | null;
+  score: number;
+  segment: LeadSegment;
+  pipeline_stage: LeadPipelineStage;
+  tags: string[];
+  first_seen_at: string;
+  last_activity_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeadActivity {
+  id: string;
+  lead_id: string;
+  org_id: string;
+  activity_type: ActivityType;
+  source: ActivitySource;
+  source_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+// Webhook Event Log
+
+export type WebhookProcessingResult = 'success' | 'error' | 'ignored' | 'pending';
+
+export interface WebhookEvent {
+  id: string;
+  org_id: string | null;
+  event_type: string;
+  channel: string | null;
+  payload: Record<string, unknown>;
+  source_ip: string | null;
+  signature_valid: boolean;
+  processing_result: WebhookProcessingResult;
+  error: string | null;
+  created_at: string;
+}

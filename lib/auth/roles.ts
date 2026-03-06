@@ -48,7 +48,7 @@ export function isAdmin(user: DashboardUser): boolean {
 }
 
 export function canAccessPage(user: DashboardUser, page: string): boolean {
-  const adminOnlyPages = ['/templates', '/flows', '/testing', '/settings'];
+  const adminOnlyPages = ['/templates', '/flows', '/testing', '/settings', '/webhook-events'];
 
   if (adminOnlyPages.some(p => page.startsWith(p))) {
     return user.role === 'admin';

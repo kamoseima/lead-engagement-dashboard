@@ -11,14 +11,17 @@ import {
   GitBranch,
   Megaphone,
   FlaskConical,
+  ScrollText,
+  Users,
+  BarChart3,
   Settings,
   LogOut,
-  Zap,
   PanelLeftClose,
   PanelLeftOpen,
   Sun,
   Moon,
 } from 'lucide-react';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
@@ -39,7 +42,10 @@ const navItems: NavItem[] = [
   { label: 'Templates', href: '/templates', icon: FileText, adminOnly: true },
   { label: 'Flows', href: '/flows', icon: GitBranch, adminOnly: true },
   { label: 'Campaigns', href: '/campaigns', icon: Megaphone },
+  { label: 'Leads', href: '/leads', icon: Users },
+  { label: 'Reports', href: '/reports', icon: BarChart3 },
   { label: 'Testing', href: '/testing', icon: FlaskConical, adminOnly: true },
+  { label: 'Webhooks', href: '/webhook-events', icon: ScrollText, adminOnly: true },
   { label: 'Settings', href: '/settings', icon: Settings, adminOnly: true },
 ];
 
@@ -90,14 +96,14 @@ export function Sidebar({ userRole, userEmail, displayName }: SidebarProps) {
       <div className="flex items-center border-b border-border px-3 py-[14px]">
         {collapsed ? (
           <div className="flex w-full justify-center">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary">
-              <Zap className="h-4 w-4 text-white" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white overflow-hidden">
+              <Image src="/logo.jpg" alt="FibreCompare" width={32} height={32} className="object-contain" />
             </div>
           </div>
         ) : (
           <div className="flex items-center gap-2.5 px-1">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary">
-              <Zap className="h-4 w-4 text-white" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white overflow-hidden">
+              <Image src="/logo.jpg" alt="FibreCompare" width={32} height={32} className="object-contain" />
             </div>
             <div className="flex flex-col leading-none">
               <span className="text-[11px] font-semibold tracking-wide text-muted-foreground/70 uppercase">
