@@ -10,6 +10,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
 
 interface DashboardStats {
   flows: number;
@@ -20,10 +21,24 @@ interface DashboardStats {
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({ flows: 0, campaigns: 0, sends: 0 });
   const [isLoading, setIsLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     loadStats();
+    loadRole();
   }, []);
+
+  const loadRole = async () => {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from('dashboard_users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    if (data?.role === 'admin') setIsAdmin(true);
+  };
 
   const loadStats = async () => {
     try {
@@ -90,8 +105,8 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Quick Actions */}
-      <div>
+      {/* Quick Actions — admin only */}
+      {isAdmin && <div>
         <h2 className="mb-4 text-lg font-semibold">Quick Actions</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {quickActions.map(action => {
@@ -109,7 +124,7 @@ export default function DashboardPage() {
             );
           })}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
