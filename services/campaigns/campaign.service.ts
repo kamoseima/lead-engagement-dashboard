@@ -5,6 +5,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { platformApi } from '@/lib/platform-api';
 import { type StepResult, success, failure } from '@/lib/shared/result';
 import type { Campaign, CampaignLead, CampaignSend, ScheduleType, SendMode, Frequency } from '@/types/database';
@@ -140,7 +141,8 @@ export async function sendCampaignMessage(
   contentSid: string,
   variables: Record<string, string>
 ): Promise<StepResult<CampaignSend>> {
-  const supabase = await createClient();
+  // Use admin client so this works from both authenticated requests and cron jobs (no user session)
+  const supabase = createAdminClient();
   const idempotencyKey = `${campaignId}_${lead.phone}_${Date.now()}`;
 
   // Create send record

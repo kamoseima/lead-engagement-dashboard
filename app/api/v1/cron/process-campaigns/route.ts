@@ -61,6 +61,13 @@ export async function GET(_request: NextRequest) {
     const sent = sendResults.filter(r => r.status === 'fulfilled').length;
     const failed = sendResults.filter(r => r.status === 'rejected').length;
 
+    // Log any failures for debugging
+    sendResults.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        console.error(`Campaign ${campaign.id} lead[${i}] failed:`, r.reason);
+      }
+    });
+
     if (campaign.schedule_type === 'recurring') {
       // Compute next run time
       const nextRun = computeNextRun(campaign);
