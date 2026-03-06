@@ -7,9 +7,10 @@
 
 import sgMail from '@sendgrid/mail';
 
-const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY ?? '';
-const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL ?? 'noreply@apextech.group';
-const FROM_NAME = process.env.SENDGRID_FROM_NAME ?? 'Lead Engage';
+// Trim to guard against trailing newlines injected by shell echo when setting env vars
+const SENDGRID_API_KEY = (process.env.SENDGRID_API_KEY ?? '').trim();
+const FROM_EMAIL = (process.env.SENDGRID_FROM_EMAIL ?? 'noreply@apextech.group').trim();
+const FROM_NAME = (process.env.SENDGRID_FROM_NAME ?? 'Lead Engage').trim();
 
 interface SendInviteEmailParams {
   to: string;
