@@ -133,6 +133,7 @@ export interface TestRun {
   messages: TestRunMessage[];
   template_name: string | null;
   variables: Record<string, string> | null;
+  flow_state: Record<string, unknown> | null;
   error: string | null;
   started_at: string;
   completed_at: string | null;

@@ -17,6 +17,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'crypto';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { processInboundForTestRun } from '@/services/testing/flow-engine.service';
+import type { TestRun } from '@/types/database';
 
 // ============================================================================
 // CONFIGURATION
@@ -110,10 +113,60 @@ export async function POST(request: NextRequest) {
       }),
     });
 
+    // Process inbound WhatsApp messages for active test runs (flow engine)
+    if (payload.event === 'message.received' && payload.incoming?.body) {
+      // Strip whatsapp: prefix to get raw phone number
+      const fromPhone = (payload.incoming.from || '').replace(/^whatsapp:/, '');
+      const body = payload.incoming.body;
+
+      if (fromPhone) {
+        try {
+          await handleInboundForTests(fromPhone, body);
+        } catch (err) {
+          console.error('[webhook] Error processing inbound for test runs:', err);
+        }
+      }
+    }
+
     // Acknowledge immediately — the comms platform expects 200
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (error) {
     console.error('[webhook] Failed to process comms callback', error);
     return NextResponse.json({ received: true, error: 'Processing error' }, { status: 200 });
   }
+}
+
+// ============================================================================
+// FLOW ENGINE — Process inbound messages for active test runs
+// ============================================================================
+
+async function handleInboundForTests(fromPhone: string, body: string) {
+  const supabase = createAdminClient();
+
+  // Find active test runs waiting for a reply from this phone number.
+  // Match both with and without country code prefix variations.
+  const phoneVariants = [fromPhone];
+  if (fromPhone.startsWith('+')) phoneVariants.push(fromPhone.slice(1));
+  else phoneVariants.push(`+${fromPhone}`);
+
+  const { data: activeRuns } = await supabase
+    .from('test_runs')
+    .select('*')
+    .eq('status', 'waiting_reply')
+    .in('lead_phone', phoneVariants)
+    .not('flow_state', 'is', null)
+    .order('started_at', { ascending: false })
+    .limit(5);
+
+  if (!activeRuns || activeRuns.length === 0) {
+    console.log(`[webhook] No active test runs for ${fromPhone}`);
+    return;
+  }
+
+  // Process the most recent active run
+  const testRun = activeRuns[0] as TestRun;
+  console.log(`[webhook] Routing inbound "${body}" to test run ${testRun.id}`);
+
+  const result = await processInboundForTestRun(testRun, body);
+  console.log(`[webhook] Flow engine result:`, result);
 }

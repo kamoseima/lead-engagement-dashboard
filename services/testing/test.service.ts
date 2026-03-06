@@ -120,6 +120,22 @@ export async function launchTest(
     return failure('VALIDATION_ERROR', `Could not resolve content_sid for template "${input.templateName}"`);
   }
 
+  // Resolve flow_id from the scenario (for multi-step flow tests)
+  let flowState: { flowId: string; stepPath: number[]; retryCount: number } | null = null;
+  const { data: scenario } = await supabase
+    .from('test_scenarios')
+    .select('flow_id')
+    .eq('id', input.scenarioId)
+    .single();
+
+  if (scenario?.flow_id) {
+    flowState = {
+      flowId: scenario.flow_id,
+      stepPath: [0], // Start at first step
+      retryCount: 0,
+    };
+  }
+
   // Create test run record
   const { data: testRun, error: insertError } = await supabase
     .from('test_runs')
@@ -133,6 +149,7 @@ export async function launchTest(
       variables: input.variables,
       messages: [],
       created_by: userId,
+      ...(flowState ? { flow_state: flowState } : {}),
     })
     .select()
     .single();
