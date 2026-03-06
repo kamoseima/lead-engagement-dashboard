@@ -14,6 +14,7 @@ export interface CreateCampaignInput {
   description?: string;
   flow_id?: string;
   template_name?: string;
+  content_sid?: string;
   leads: CampaignLead[];
   schedule_at?: string;
   schedule_type?: ScheduleType;
@@ -67,7 +68,7 @@ export async function createCampaign(
   const supabase = await createClient();
 
   const scheduleType = input.schedule_type || 'immediate';
-  const status = scheduleType === 'immediate' ? 'draft' : 'scheduled';
+  const status = scheduleType === 'immediate' ? 'active' : 'scheduled';
 
   const { data, error } = await supabase
     .from('campaigns')
@@ -94,6 +95,27 @@ export async function createCampaign(
     .single();
 
   if (error) return failure('INTERNAL_ERROR', error.message);
+
+  // For immediate campaigns with a template, fire sends right away
+  if (scheduleType === 'immediate' && input.template_name && input.content_sid) {
+    const variables: Record<string, string> = {};
+    await Promise.allSettled(
+      input.leads.map(lead =>
+        sendCampaignMessage(
+          orgId,
+          data.id,
+          lead,
+          input.template_name!,
+          input.content_sid!,
+          { ...variables, ...(lead.variables as Record<string, string> | undefined) },
+        )
+      )
+    );
+    await supabase.from('campaigns').update({ status: 'completed' }).eq('id', data.id);
+    const { data: updated } = await supabase.from('campaigns').select('*').eq('id', data.id).single();
+    return success((updated ?? data) as Campaign);
+  }
+
   return success(data as Campaign);
 }
 

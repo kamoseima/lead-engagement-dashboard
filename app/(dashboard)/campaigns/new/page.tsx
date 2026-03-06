@@ -219,6 +219,7 @@ export default function NewCampaignPage() {
 
     if (messageMode === 'template' && selectedTemplate) {
       payload.template_name = selectedTemplate.name;
+      payload.content_sid = selectedTemplate.content_sid;
     } else if (messageMode === 'flow' && selectedFlow) {
       payload.flow_id = selectedFlow.id;
     } else if (messageMode === 'custom') {
