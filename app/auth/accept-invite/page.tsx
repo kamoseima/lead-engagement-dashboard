@@ -31,17 +31,34 @@ function AcceptInviteForm() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    const supabase = createClient();
+
+    // PKCE flow: ?code= in query string
     const code = searchParams.get('code');
-    if (!code) {
-      setError('Invalid or expired invite link.');
-      setIsExchanging(false);
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+        if (error) setError(error.message);
+        setIsExchanging(false);
+      });
       return;
     }
-    const supabase = createClient();
-    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-      if (error) setError(error.message);
-      setIsExchanging(false);
+
+    // Implicit flow: #access_token= in hash — supabase client detects automatically.
+    // Listen for the resulting SIGNED_IN event.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        setIsExchanging(false);
+      } else if (event === 'INITIAL_SESSION') {
+        if (session) {
+          setIsExchanging(false);
+        } else {
+          setError('Invalid or expired invite link.');
+          setIsExchanging(false);
+        }
+      }
     });
+
+    return () => subscription.unsubscribe();
   }, [searchParams]);
 
   const handleSetPassword = async (e: React.FormEvent) => {
