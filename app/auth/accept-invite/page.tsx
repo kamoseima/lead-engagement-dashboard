@@ -53,31 +53,24 @@ function AcceptInviteForm() {
       return;
     }
 
-    // 3. Implicit flow: #access_token= in URL hash (client auto-processes it).
-    //    INITIAL_SESSION fires with null before the hash is parsed — only treat
-    //    null as an error when there's definitely no hash token.
-    const hasHashToken = typeof window !== 'undefined' && window.location.hash.includes('access_token');
+    // 3. Implicit flow: generateLink always redirects with #access_token= in the hash.
+    //    @supabase/ssr's createBrowserClient does NOT auto-process hash fragments,
+    //    so we parse and set the session manually.
+    const hash = typeof window !== 'undefined' ? window.location.hash.substring(1) : '';
+    const hashParams = new URLSearchParams(hash);
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
 
-    if (!hasHashToken) {
-      setError('Invalid or expired invite link.');
-      setIsExchanging(false);
+    if (accessToken && refreshToken) {
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ error }) => {
+        if (error) setError(error.message);
+        setIsExchanging(false);
+      });
       return;
     }
 
-    // Set up listener before getSession so we don't miss events
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
-        setIsExchanging(false);
-      }
-    });
-
-    // INITIAL_SESSION may have already fired before the listener was attached —
-    // check the session directly as a fallback.
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setIsExchanging(false);
-    });
-
-    return () => subscription.unsubscribe();
+    setError('Invalid or expired invite link.');
+    setIsExchanging(false);
   }, [searchParams]);
 
   const handleSetPassword = async (e: React.FormEvent) => {
