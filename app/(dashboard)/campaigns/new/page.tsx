@@ -470,6 +470,7 @@ export default function NewCampaignPage() {
                     titleText={selectedTemplate.title}
                     variableNames={variableNames}
                     onChange={setVariableNames}
+                    friendlyNames={selectedTemplate.variables}
                   />
                 </section>
               )}

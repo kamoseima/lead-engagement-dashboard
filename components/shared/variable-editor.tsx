@@ -11,6 +11,8 @@ interface VariableEditorProps {
   /** Map of variable number (as string) to descriptive name. */
   variableNames: Record<string, string>;
   onChange: (names: Record<string, string>) => void;
+  /** Friendly names from the template definition (e.g. ["firstName", "price"]) */
+  friendlyNames?: string[];
 }
 
 export function VariableEditor({
@@ -18,6 +20,7 @@ export function VariableEditor({
   titleText,
   variableNames,
   onChange,
+  friendlyNames = [],
 }: VariableEditorProps) {
   const variables = useMemo(() => {
     const combined = [bodyText, titleText || ''].join(' ');
@@ -27,25 +30,38 @@ export function VariableEditor({
   if (variables.length === 0) return null;
 
   return (
-    <div className="space-y-2">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
-        Variables detected
-      </p>
-      {variables.map((num) => (
-        <div key={num} className="flex items-center gap-2">
-          <span className="flex h-7 shrink-0 items-center rounded bg-primary/10 px-2 font-mono text-[11px] font-semibold text-primary">
-            {`{{${num}}}`}
-          </span>
-          <Input
-            placeholder={`e.g. customer_name`}
-            value={variableNames[String(num)] || ''}
-            onChange={(e) =>
-              onChange({ ...variableNames, [String(num)]: e.target.value })
-            }
-            className="h-7 text-xs"
-          />
-        </div>
-      ))}
+    <div className="space-y-3">
+      <div>
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+          Variable Values
+        </p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          These values are sent to all recipients. Leave blank to use template defaults.
+        </p>
+      </div>
+      {variables.map((num) => {
+        const friendlyName = friendlyNames[num - 1];
+        return (
+          <div key={num} className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-[10px] font-semibold text-primary">
+                {`{{${num}}}`}
+              </span>
+              {friendlyName && (
+                <span className="text-[11px] text-muted-foreground">— {friendlyName}</span>
+              )}
+            </div>
+            <Input
+              placeholder={friendlyName ? `Enter ${friendlyName}…` : `Value for {{${num}}}`}
+              value={variableNames[String(num)] || ''}
+              onChange={(e) =>
+                onChange({ ...variableNames, [String(num)]: e.target.value })
+              }
+              className="h-8 text-xs"
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
