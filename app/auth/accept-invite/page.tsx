@@ -64,10 +64,17 @@ function AcceptInviteForm() {
       return;
     }
 
+    // Set up listener before getSession so we don't miss events
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
         setIsExchanging(false);
       }
+    });
+
+    // INITIAL_SESSION may have already fired before the listener was attached —
+    // check the session directly as a fallback.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setIsExchanging(false);
     });
 
     return () => subscription.unsubscribe();
