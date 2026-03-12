@@ -60,6 +60,7 @@ export interface CampaignLead {
   variables?: Record<string, string>;
 }
 
+export type CampaignChannel = 'whatsapp' | 'email';
 export type ScheduleType = 'immediate' | 'once' | 'recurring';
 export type SendMode = 'all_at_once' | 'batched';
 export type Frequency = 'daily' | 'weekly' | 'monthly';
@@ -69,6 +70,7 @@ export interface Campaign {
   org_id: string;
   name: string;
   description: string | null;
+  channel: CampaignChannel;
   flow_id: string | null;
   template_name: string | null;
   status: CampaignStatus;

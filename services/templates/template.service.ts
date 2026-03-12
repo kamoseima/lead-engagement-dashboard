@@ -26,7 +26,7 @@ export interface Template {
 }
 
 export interface TemplateButton {
-  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER';
+  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE';
   text: string;
   url?: string;
   phone?: string;
@@ -41,6 +41,13 @@ export interface CreateTemplateInput {
   buttons?: TemplateButton[];
   media_url?: string;
   media_type?: string;
+  catalog_id?: string;
+  carousel_cards?: Array<{
+    title: string;
+    body: string;
+    mediaUrl: string;
+    buttons: TemplateButton[];
+  }>;
 }
 
 /** Shape returned by the platform API */
@@ -121,8 +128,24 @@ export async function createTemplate(
       body: input.body,
       ...(input.title ? { title: input.title } : {}),
       ...(input.media_url ? { media: [input.media_url] } : {}),
+      ...(input.catalog_id ? { catalog_id: input.catalog_id } : {}),
     },
   };
+
+  if (input.carousel_cards && input.carousel_cards.length > 0) {
+    (platformBody.content as Record<string, unknown>).cards = input.carousel_cards.map(card => ({
+      title: card.title,
+      body: card.body,
+      media: card.mediaUrl ? [card.mediaUrl] : [],
+      actions: card.buttons.map(b => ({
+        type: b.type,
+        title: b.text,
+        ...(b.type === 'QUICK_REPLY' ? { id: b.text.toLowerCase().replace(/\s+/g, '_') } : {}),
+        ...(b.url ? { url: b.url } : {}),
+        ...(b.phone ? { phone: b.phone } : {}),
+      })),
+    }));
+  }
 
   if (input.variables && input.variables.length > 0) {
     const vars: Record<string, string> = {};
@@ -135,6 +158,7 @@ export async function createTemplate(
       type: b.type,
       title: b.text,
       ...(b.type === 'QUICK_REPLY' ? { id: b.text.toLowerCase().replace(/\s+/g, '_') } : {}),
+      ...(b.type === 'COPY_CODE' ? { copy_code_text: b.text } : {}),
       ...(b.url ? { url: b.url } : {}),
       ...(b.phone ? { phone: b.phone } : {}),
     }));

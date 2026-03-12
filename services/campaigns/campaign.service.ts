@@ -8,11 +8,12 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { platformApi } from '@/lib/platform-api';
 import { type StepResult, success, failure } from '@/lib/shared/result';
-import type { Campaign, CampaignLead, CampaignSend, ScheduleType, SendMode, Frequency } from '@/types/database';
+import type { Campaign, CampaignChannel, CampaignLead, CampaignSend, ScheduleType, SendMode, Frequency } from '@/types/database';
 
 export interface CreateCampaignInput {
   name: string;
   description?: string;
+  channel?: CampaignChannel;
   flow_id?: string;
   template_name?: string;
   content_sid?: string;
@@ -28,30 +29,53 @@ export interface CreateCampaignInput {
   config?: Record<string, unknown>;
 }
 
-export async function listCampaigns(orgId: string): Promise<StepResult<Campaign[]>> {
+export interface CampaignWithCreator extends Campaign {
+  creator_name: string | null;
+  creator_email: string;
+}
+
+export async function listCampaigns(orgId: string): Promise<StepResult<CampaignWithCreator[]>> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from('campaigns')
-    .select('*')
+    .select('*, creator:dashboard_users!campaigns_created_by_fkey(display_name, email)')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false });
 
   if (error) return failure('INTERNAL_ERROR', error.message);
-  return success((data ?? []) as Campaign[]);
+
+  const campaigns = (data ?? []).map((row: Record<string, unknown>) => {
+    const creator = row.creator as { display_name: string | null; email: string } | null;
+    const { creator: _, ...campaign } = row;
+    return {
+      ...campaign,
+      creator_name: creator?.display_name ?? null,
+      creator_email: creator?.email ?? '',
+    } as CampaignWithCreator;
+  });
+
+  return success(campaigns);
 }
 
-export async function getCampaign(campaignId: string): Promise<StepResult<Campaign>> {
+export async function getCampaign(campaignId: string): Promise<StepResult<CampaignWithCreator>> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from('campaigns')
-    .select('*')
+    .select('*, creator:dashboard_users!campaigns_created_by_fkey(display_name, email)')
     .eq('id', campaignId)
     .single();
 
   if (error) return failure('NOT_FOUND', 'Campaign not found');
-  return success(data as Campaign);
+
+  const creator = (data as Record<string, unknown>).creator as { display_name: string | null; email: string } | null;
+  const { creator: _, ...campaign } = data as Record<string, unknown>;
+  return success({
+    ...campaign,
+    creator_name: creator?.display_name ?? null,
+    creator_email: creator?.email ?? '',
+  } as CampaignWithCreator);
 }
 
 export async function createCampaign(
@@ -77,6 +101,7 @@ export async function createCampaign(
       org_id: orgId,
       name: input.name,
       description: input.description || null,
+      channel: input.channel || 'whatsapp',
       flow_id: input.flow_id || null,
       template_name: input.template_name || null,
       status,

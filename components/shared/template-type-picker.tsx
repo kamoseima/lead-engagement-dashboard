@@ -30,7 +30,7 @@ const TEMPLATE_TYPES: TemplateTypeOption[] = [
   {
     value: 'quick-reply',
     label: 'Quick Reply',
-    description: 'Body + up to 3 reply buttons.',
+    description: 'Body + up to 10 reply buttons.',
     icon: Reply,
   },
   {
@@ -60,19 +60,19 @@ const TEMPLATE_TYPES: TemplateTypeOption[] = [
   {
     value: 'list-picker',
     label: 'List Picker',
-    description: 'Body + button that opens selectable menu.',
+    description: 'In-session only. Opens selectable menu.',
     icon: List,
   },
   {
     value: 'authentication',
     label: 'Authentication',
-    description: 'OTP / verification code.',
+    description: 'OTP with Copy Code button.',
     icon: Lock,
   },
   {
     value: 'catalog',
     label: 'Catalog',
-    description: 'Product catalog message.',
+    description: 'Product catalog. Requires Catalog ID.',
     icon: ShoppingCart,
   },
 ];

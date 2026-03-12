@@ -5,7 +5,7 @@ import { formatWhatsAppText, replaceVariablesWithSamples } from '@/lib/whatsapp-
 
 interface PhonePreviewButton {
   text: string;
-  type?: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER';
+  type?: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE';
 }
 
 interface PhonePreviewProps {
@@ -143,6 +143,7 @@ export function PhonePreview({
                       }`}
                     >
                       {btn.type === 'PHONE_NUMBER' && '📞 '}
+                      {btn.type === 'COPY_CODE' && '📋 '}
                       {btn.text || `Button ${i + 1}`}
                       {btn.type === 'URL' && ' ↗'}
                     </div>

@@ -33,13 +33,20 @@ interface TypeConfig {
   showBody: boolean;
   bodyLabel: string;
   bodyPlaceholder: string;
+  bodyMaxLength: number;
   showMedia: boolean;
   showButtons: boolean;
   /** Restrict which button types are allowed */
-  allowedButtonTypes?: Array<'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER'>;
+  allowedButtonTypes?: Array<'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE'>;
   buttonHint?: string;
   maxButtons: number;
   showFooter: boolean;
+  /** Whether this type can only be used in-session (not approved as template) */
+  inSessionOnly?: boolean;
+  /** Show catalog_id field */
+  showCatalogId?: boolean;
+  /** Show carousel card editor */
+  showCarouselCards?: boolean;
 }
 
 const TYPE_CONFIG: Record<string, TypeConfig> = {
@@ -49,30 +56,33 @@ const TYPE_CONFIG: Record<string, TypeConfig> = {
     showBody: true,
     bodyLabel: 'Body',
     bodyPlaceholder: 'Hi {{1}}, welcome to our service! We\'re glad to have you.',
+    bodyMaxLength: 1024,
     showMedia: false,
     showButtons: false,
     maxButtons: 0,
     showFooter: false,
   },
   'quick-reply': {
-    hint: 'Body with up to 3 quick-reply buttons. Buttons appear below the message.',
+    hint: 'Body with up to 10 quick-reply buttons (3 for in-session). Buttons appear below the message.',
     showTitle: false,
     showBody: true,
     bodyLabel: 'Body',
     bodyPlaceholder: 'Hi {{1}}, your appointment is on {{2}} at {{3}}. Would you like to confirm?',
+    bodyMaxLength: 1024,
     showMedia: false,
     showButtons: true,
     allowedButtonTypes: ['QUICK_REPLY'],
-    buttonHint: 'Quick reply buttons only. Max 3.',
-    maxButtons: 3,
+    buttonHint: 'Quick reply buttons only. Max 10 (approved) or 3 (in-session).',
+    maxButtons: 10,
     showFooter: false,
   },
   'call-to-action': {
-    hint: 'Body with URL or phone number action buttons.',
+    hint: 'Body with URL or phone number action buttons. Max 640 characters.',
     showTitle: false,
     showBody: true,
     bodyLabel: 'Body',
     bodyPlaceholder: 'Hi {{1}}, click below to view your order or call us for support.',
+    bodyMaxLength: 640,
     showMedia: false,
     showButtons: true,
     allowedButtonTypes: ['URL', 'PHONE_NUMBER'],
@@ -86,6 +96,7 @@ const TYPE_CONFIG: Record<string, TypeConfig> = {
     showBody: true,
     bodyLabel: 'Body',
     bodyPlaceholder: 'Here are the details of your order. Click below to proceed.',
+    bodyMaxLength: 1024,
     showMedia: true,
     showButtons: true,
     buttonHint: 'Any button type. Max 3.',
@@ -98,54 +109,64 @@ const TYPE_CONFIG: Record<string, TypeConfig> = {
     showBody: true,
     bodyLabel: 'Caption',
     bodyPlaceholder: 'Check out our latest offer! {{1}}',
+    bodyMaxLength: 1024,
     showMedia: true,
     showButtons: false,
     maxButtons: 0,
     showFooter: false,
   },
   carousel: {
-    hint: 'Multiple swipeable cards. Each card can have its own media, body, and buttons.',
+    hint: 'Multiple swipeable cards. Each card: title + body max 160 chars, media required, 1–2 buttons.',
     showTitle: false,
     showBody: true,
     bodyLabel: 'Intro Body',
     bodyPlaceholder: 'Hi {{1}}, here are some options for you:',
+    bodyMaxLength: 1024,
     showMedia: false,
     showButtons: false,
     maxButtons: 0,
     showFooter: false,
+    showCarouselCards: true,
   },
   'list-picker': {
-    hint: 'Message with a button that opens a selectable list menu.',
+    hint: 'Message with a button that opens a selectable list menu. In-session only — cannot be submitted for template approval.',
     showTitle: false,
     showBody: true,
     bodyLabel: 'Body',
     bodyPlaceholder: 'Hi {{1}}, please select an option from the menu below.',
+    bodyMaxLength: 1024,
     showMedia: false,
     showButtons: false,
     maxButtons: 0,
     showFooter: false,
+    inSessionOnly: true,
   },
   authentication: {
-    hint: 'OTP / verification code template.',
+    hint: 'OTP / verification code template. Use a Copy Code button for auto-copy.',
     showTitle: false,
     showBody: true,
     bodyLabel: 'Body',
     bodyPlaceholder: 'Your verification code is {{1}}. It expires in 10 minutes.',
+    bodyMaxLength: 1024,
     showMedia: false,
-    showButtons: false,
-    maxButtons: 0,
+    showButtons: true,
+    allowedButtonTypes: ['COPY_CODE'],
+    buttonHint: 'Copy Code button for OTP auto-copy. Max 1.',
+    maxButtons: 1,
     showFooter: false,
   },
   catalog: {
-    hint: 'Product catalog message linking to your product inventory.',
+    hint: 'Product catalog message. Requires a Catalog ID from Meta Commerce Manager.',
     showTitle: false,
     showBody: true,
     bodyLabel: 'Body',
     bodyPlaceholder: 'Hi {{1}}, browse our latest products below!',
+    bodyMaxLength: 1024,
     showMedia: false,
     showButtons: false,
     maxButtons: 0,
     showFooter: false,
+    showCatalogId: true,
   },
 };
 
@@ -155,6 +176,7 @@ const DEFAULT_CONFIG: TypeConfig = {
   showBody: true,
   bodyLabel: 'Body',
   bodyPlaceholder: 'Hi {{1}}, your message here...',
+  bodyMaxLength: 1024,
   showMedia: false,
   showButtons: false,
   maxButtons: 0,
@@ -185,6 +207,11 @@ export default function TemplatesPage() {
   const [variableNames, setVariableNames] = useState<Record<string, string>>(
     {}
   );
+  const [catalogId, setCatalogId] = useState('');
+  const [carouselCards, setCarouselCards] = useState<
+    Array<{ title: string; body: string; mediaUrl: string; buttons: TemplateButton[] }>
+  >([]);
+  const [footerError, setFooterError] = useState('');
 
   // Derived config for current type
   const cfg = TYPE_CONFIG[type] || DEFAULT_CONFIG;
@@ -219,6 +246,9 @@ export default function TemplatesPage() {
     setButtons([]);
     setVariableNames({});
     setEditingTemplate(null);
+    setCatalogId('');
+    setCarouselCards([]);
+    setFooterError('');
   };
 
   const openCreate = () => {
@@ -256,6 +286,13 @@ export default function TemplatesPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate footer has no variables
+    if (footer && /\{\{\d+\}\}/.test(footer)) {
+      setFooterError('Variables are not supported in footers.');
+      return;
+    }
+
     setIsSaving(true);
 
     const input: CreateTemplateInput = {
@@ -270,6 +307,10 @@ export default function TemplatesPage() {
         Object.keys(variableNames).length > 0
           ? Object.values(variableNames)
           : undefined,
+      ...(cfg.showCatalogId && catalogId ? { catalog_id: catalogId } : {}),
+      ...(cfg.showCarouselCards && carouselCards.length > 0
+        ? { carousel_cards: carouselCards }
+        : {}),
     };
 
     try {
@@ -411,7 +452,7 @@ export default function TemplatesPage() {
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
                     rows={5}
-                    maxLength={1024}
+                    maxLength={cfg.bodyMaxLength}
                   />
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-muted-foreground">
@@ -419,7 +460,7 @@ export default function TemplatesPage() {
                       *bold*, _italic_, ~strike~.
                     </p>
                     <span className="text-[10px] text-muted-foreground">
-                      {body.length}/1024
+                      {body.length}/{cfg.bodyMaxLength}
                     </span>
                   </div>
                 </div>
@@ -433,12 +474,28 @@ export default function TemplatesPage() {
                     id="tplFooter"
                     placeholder="e.g. Reply STOP to unsubscribe"
                     value={footer}
-                    onChange={(e) => setFooter(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFooter(val);
+                      if (/\{\{\d+\}\}/.test(val)) {
+                        setFooterError('Variables are not supported in footers.');
+                      } else {
+                        setFooterError('');
+                      }
+                    }}
                     maxLength={60}
                   />
-                  <p className="text-right text-[10px] text-muted-foreground">
-                    {footer.length}/60
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] text-muted-foreground">
+                      No variables allowed in footer.
+                    </p>
+                    <span className="text-[10px] text-muted-foreground">
+                      {footer.length}/60
+                    </span>
+                  </div>
+                  {footerError && (
+                    <p className="text-[10px] text-destructive">{footerError}</p>
+                  )}
                 </div>
               )}
 
@@ -470,6 +527,129 @@ export default function TemplatesPage() {
                 </div>
               )}
             </section>
+
+            {/* In-session only warning */}
+            {cfg.inSessionOnly && (
+              <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3">
+                <p className="text-xs font-medium text-warning">In-session only</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  This template type can only be sent in active conversations. It cannot be submitted for WhatsApp template approval.
+                </p>
+              </div>
+            )}
+
+            {/* Catalog ID (catalog type) */}
+            {cfg.showCatalogId && (
+              <section className="space-y-3 rounded-xl border border-border bg-card p-5">
+                <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                  Catalog
+                </h2>
+                <div className="grid gap-2">
+                  <Label htmlFor="tplCatalogId">Catalog ID</Label>
+                  <Input
+                    id="tplCatalogId"
+                    placeholder="e.g. 123456789012345"
+                    value={catalogId}
+                    onChange={(e) => setCatalogId(e.target.value)}
+                    className="font-mono text-sm"
+                    required
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    From Meta Commerce Manager. Required to link your product catalog.
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {/* Carousel Cards (carousel type) */}
+            {cfg.showCarouselCards && (
+              <section className="space-y-3 rounded-xl border border-border bg-card p-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                    Carousel Cards
+                  </h2>
+                  {carouselCards.length < 10 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCarouselCards([
+                          ...carouselCards,
+                          { title: '', body: '', mediaUrl: '', buttons: [] },
+                        ])
+                      }
+                      className="flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <Plus className="h-3 w-3" /> Add Card
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Up to 10 cards. Each card: title + body max 160 chars combined, media required, 1–2 buttons.
+                </p>
+                {carouselCards.map((card, ci) => {
+                  const combinedLen = card.title.length + card.body.length;
+                  return (
+                    <div key={ci} className="space-y-2 rounded-lg border border-border bg-background p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium">Card {ci + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCarouselCards(carouselCards.filter((_, i) => i !== ci))
+                          }
+                          className="text-xs text-destructive hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <Input
+                        placeholder="Card title"
+                        value={card.title}
+                        onChange={(e) => {
+                          const updated = [...carouselCards];
+                          updated[ci] = { ...updated[ci], title: e.target.value };
+                          setCarouselCards(updated);
+                        }}
+                        className="h-8 text-xs"
+                      />
+                      <Input
+                        placeholder="Card body"
+                        value={card.body}
+                        onChange={(e) => {
+                          const updated = [...carouselCards];
+                          updated[ci] = { ...updated[ci], body: e.target.value };
+                          setCarouselCards(updated);
+                        }}
+                        className="h-8 text-xs"
+                      />
+                      <p className={`text-[10px] ${combinedLen > 160 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        {combinedLen}/160 chars (title + body combined)
+                      </p>
+                      <Input
+                        placeholder="Media URL (required)"
+                        value={card.mediaUrl}
+                        onChange={(e) => {
+                          const updated = [...carouselCards];
+                          updated[ci] = { ...updated[ci], mediaUrl: e.target.value };
+                          setCarouselCards(updated);
+                        }}
+                        className="h-8 text-xs"
+                        required
+                      />
+                      <ButtonEditor
+                        buttons={card.buttons}
+                        onChange={(newButtons) => {
+                          const updated = [...carouselCards];
+                          updated[ci] = { ...updated[ci], buttons: newButtons };
+                          setCarouselCards(updated);
+                        }}
+                        maxButtons={2}
+                      />
+                    </div>
+                  );
+                })}
+              </section>
+            )}
 
             {/* Buttons */}
             {cfg.showButtons && (

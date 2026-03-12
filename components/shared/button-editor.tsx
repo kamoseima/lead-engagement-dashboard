@@ -10,6 +10,7 @@ const ALL_TYPES: { value: ButtonType; label: string }[] = [
   { value: 'QUICK_REPLY', label: 'Reply' },
   { value: 'URL', label: 'URL' },
   { value: 'PHONE_NUMBER', label: 'Phone' },
+  { value: 'COPY_CODE', label: 'Copy Code' },
 ];
 
 interface ButtonEditorProps {
@@ -72,12 +73,18 @@ export function ButtonEditor({
             </span>
           )}
 
-          <Input
-            placeholder="Button text"
-            value={btn.text}
-            onChange={(e) => updateButton(i, { text: e.target.value })}
-            className="h-8 flex-1 text-xs"
-          />
+          <div className="flex flex-1 flex-col gap-0.5">
+            <Input
+              placeholder={btn.type === 'COPY_CODE' ? 'e.g. Copy Code' : 'Button text'}
+              value={btn.text}
+              onChange={(e) => updateButton(i, { text: e.target.value })}
+              className="h-8 text-xs"
+              maxLength={25}
+            />
+            <span className="text-right text-[9px] text-muted-foreground">
+              {btn.text.length}/25
+            </span>
+          </div>
 
           {btn.type === 'URL' && (
             <Input

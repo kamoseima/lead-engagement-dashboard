@@ -97,13 +97,13 @@ export function Sidebar({ userRole, userEmail, displayName }: SidebarProps) {
         {collapsed ? (
           <div className="flex w-full justify-center">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white overflow-hidden">
-              <Image src="/logo.jpg" alt="FibreCompare" width={32} height={32} className="object-contain" />
+              <Image src="/logo.jpg" alt="FibreCompare" width={32} height={32} className="object-contain" style={{ width: 'auto', height: 'auto', maxWidth: 32, maxHeight: 32 }} />
             </div>
           </div>
         ) : (
           <div className="flex items-center gap-2.5 px-1">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white overflow-hidden">
-              <Image src="/logo.jpg" alt="FibreCompare" width={32} height={32} className="object-contain" />
+              <Image src="/logo.jpg" alt="FibreCompare" width={32} height={32} className="object-contain" style={{ width: 'auto', height: 'auto', maxWidth: 32, maxHeight: 32 }} />
             </div>
             <div className="flex flex-col leading-none">
               <span className="text-[11px] font-semibold tracking-wide text-muted-foreground/70 uppercase">

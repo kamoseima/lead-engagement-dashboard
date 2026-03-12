@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Zap } from 'lucide-react';
+import Image from 'next/image';
 
 export function LoginForm({
   className,
@@ -43,9 +43,14 @@ export function LoginForm({
   return (
     <div className={cn('flex flex-col gap-6', className)} {...props}>
       <div className="flex flex-col items-center gap-3">
-        <div className="flex items-center gap-2">
-          <Zap className="h-6 w-6 text-primary" />
-          <span className="text-xl font-bold tracking-tight">Lead Engage</span>
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white overflow-hidden">
+            <Image src="/logo.jpg" alt="FibreCompare" width={56} height={56} className="object-contain" style={{ width: 'auto', height: 'auto', maxWidth: 56, maxHeight: 56 }} />
+          </div>
+          <div className="flex flex-col items-center leading-none gap-0.5">
+            <span className="text-[11px] font-semibold tracking-wide text-muted-foreground/70 uppercase">FibreCompare</span>
+            <span className="text-xl font-bold tracking-tight">Lead Engage</span>
+          </div>
         </div>
         <p className="text-sm text-muted-foreground">
           Sign in to your dashboard
