@@ -286,21 +286,29 @@ export default function TemplatesPage() {
   // Body max length per-type config
   const effectiveBodyMaxLength = cfg.bodyMaxLength;
 
-  // When a type with forcedCategory is selected, auto-set the category to match
-  useEffect(() => {
-    if (cfg.forcedCategory && category !== cfg.forcedCategory) {
-      setCategory(cfg.forcedCategory);
-    }
-  }, [type, cfg.forcedCategory, category]);
+  // Preview body: for preset body types, show the preset text
+  const previewBody = cfg.presetBody
+    ? `{{1}} is your verification code.${addSecurityRecommendation ? '\n\nDo not share this code.' : ''}${codeExpirationMinutes ? `\n\nThis code expires in ${codeExpirationMinutes} minutes.` : ''}`
+    : body;
 
-  // When category changes and current type isn't valid, reset type
-  useEffect(() => {
+  /** Handle category change — reset type if current isn't valid for new category */
+  const handleCategoryChange = (newCategory: TemplateCategory) => {
+    setCategory(newCategory);
     const currentTypeDef = TEMPLATE_TYPES.find(t => t.value === type);
-    if (currentTypeDef?.categories && !currentTypeDef.categories.includes(category)) {
-      const fallback = TEMPLATE_TYPES.find(t => t.categories?.includes(category));
+    if (currentTypeDef?.categories && !currentTypeDef.categories.includes(newCategory)) {
+      const fallback = TEMPLATE_TYPES.find(t => t.categories?.includes(newCategory));
       if (fallback) setType(fallback.value);
     }
-  }, [category, type]);
+  };
+
+  /** Handle type change — auto-set category if the type requires it */
+  const handleTypeChange = (newType: string) => {
+    setType(newType);
+    const newCfg = TYPE_CONFIG[newType];
+    if (newCfg?.forcedCategory && category !== newCfg.forcedCategory) {
+      setCategory(newCfg.forcedCategory);
+    }
+  };
 
   // ── Load templates ───────────────────────────────────────
   const loadTemplates = useCallback(async () => {
@@ -589,7 +597,7 @@ export default function TemplatesPage() {
                       <button
                         key={cat.value}
                         type="button"
-                        onClick={() => setCategory(cat.value)}
+                        onClick={() => handleCategoryChange(cat.value)}
                         className={`rounded-lg border p-2.5 text-left transition-colors ${
                           isActive
                             ? 'border-primary bg-primary/10'
@@ -632,7 +640,7 @@ export default function TemplatesPage() {
               <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
                 Template Type
               </h2>
-              <TemplateTypePicker value={type} onChange={setType} category={category} />
+              <TemplateTypePicker value={type} onChange={handleTypeChange} category={category} />
             </section>
 
             {/* Content */}
@@ -1008,7 +1016,7 @@ export default function TemplatesPage() {
           <div className="hidden lg:block">
             <div className="sticky top-6">
               <PhonePreview
-                body={body}
+                body={previewBody}
                 title={cfg.showTitle ? title : undefined}
                 mediaUrl={cfg.showMedia ? mediaUrl : undefined}
                 footer={cfg.showFooter ? footer : undefined}

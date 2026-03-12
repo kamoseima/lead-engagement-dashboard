@@ -125,7 +125,9 @@ test.describe('Template Editor — Meta/WhatsApp/Twilio Alignment', () => {
 
     // Preset body info should be visible
     await expect(page.locator('text=Preset body by WhatsApp')).toBeVisible();
-    await expect(page.locator('text=is your verification code')).toBeVisible();
+    // Scope to the content section to avoid matching the phone preview too
+    const contentSection = page.locator('section:has(h2:has-text("Content"))');
+    await expect(contentSection.locator('text=is your verification code')).toBeVisible();
 
     // Security recommendation toggle
     await expect(page.getByText('Security Recommendation', { exact: true })).toBeVisible();
