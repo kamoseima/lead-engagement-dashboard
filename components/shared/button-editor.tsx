@@ -1,10 +1,33 @@
 'use client';
 
-import { Plus, X } from 'lucide-react';
+import { Plus, X, AlertTriangle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import type { TemplateButton } from '@/services/templates/template.service';
 
 type ButtonType = TemplateButton['type'];
+
+/** Shortened URL domains that Meta always rejects */
+const SHORTENED_URL_DOMAINS = ['bit.ly', 'tinyurl.com', 'goo.gl', 't.co', 'ow.ly', 'is.gd', 'buff.ly', 'rebrand.ly', 'short.io'];
+
+function isShortenedUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return SHORTENED_URL_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d));
+  } catch {
+    return false;
+  }
+}
+
+function hasVariableNotAtEnd(url: string): boolean {
+  const varPattern = /\{\{\d+\}\}/g;
+  const matches = [...url.matchAll(varPattern)];
+  if (matches.length === 0) return false;
+  const lastMatch = matches[matches.length - 1];
+  const afterLast = url.substring(lastMatch.index! + lastMatch[0].length);
+  if (afterLast.trim().length > 0) return true;
+  if (matches.length > 1) return true;
+  return false;
+}
 
 const ALL_TYPES: { value: ButtonType; label: string }[] = [
   { value: 'QUICK_REPLY', label: 'Reply' },
@@ -87,12 +110,24 @@ export function ButtonEditor({
           </div>
 
           {btn.type === 'URL' && (
-            <Input
-              placeholder="https://..."
-              value={btn.url || ''}
-              onChange={(e) => updateButton(i, { url: e.target.value })}
-              className="h-8 flex-1 text-xs"
-            />
+            <div className="flex flex-1 flex-col gap-0.5">
+              <Input
+                placeholder="https://example.com/page/{{1}}"
+                value={btn.url || ''}
+                onChange={(e) => updateButton(i, { url: e.target.value })}
+                className="h-8 text-xs"
+              />
+              {btn.url && isShortenedUrl(btn.url) && (
+                <p className="flex items-center gap-1 text-[9px] text-destructive">
+                  <AlertTriangle className="h-3 w-3" /> Shortened URLs are always rejected by Meta.
+                </p>
+              )}
+              {btn.url && hasVariableNotAtEnd(btn.url) && (
+                <p className="flex items-center gap-1 text-[9px] text-destructive">
+                  <AlertTriangle className="h-3 w-3" /> URL variables {'{{1}}'} must be at the end of the URL only.
+                </p>
+              )}
+            </div>
           )}
 
           {btn.type === 'PHONE_NUMBER' && (

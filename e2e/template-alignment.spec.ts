@@ -23,7 +23,9 @@ async function clickNewTemplate(page: Page) {
 }
 
 async function selectTemplateType(page: Page, typeLabel: string) {
-  await page.click(`button:has-text("${typeLabel}")`);
+  // Click within the Template Type section, matching the label span exactly
+  const typeSection = page.locator('section:has(h2:has-text("Template Type"))');
+  await typeSection.locator(`button`, { has: page.locator(`span.text-xs:text-is("${typeLabel}")`) }).click();
 }
 
 // ─── LIGHT MODE (no auth needed) ──────────────────────
@@ -76,7 +78,52 @@ test.describe('Template Editor — Meta/WhatsApp/Twilio Alignment', () => {
     await expect(page.locator('text=/\\/25/')).toBeVisible();
   });
 
-  // ─── MEDIUM PRIORITY ─────────────────────────────────
+  // ─── CATEGORY & LANGUAGE ──────────────────────────────
+
+  test('Category selector shows MARKETING, UTILITY, AUTHENTICATION', async ({ page }) => {
+    // Category section is inside Basic Info
+    const basicInfo = page.locator('section:has(h2:has-text("Basic Info"))');
+    await expect(basicInfo.locator('text=Category')).toBeVisible();
+
+    await expect(basicInfo.locator('button:has-text("Marketing")')).toBeVisible();
+    await expect(basicInfo.locator('button:has-text("Utility")')).toBeVisible();
+    // "Authentication" text also exists in template type picker, so scope to Basic Info
+    await expect(basicInfo.locator('button:has-text("Authentication")')).toBeVisible();
+  });
+
+  test('Language selector is present with default English', async ({ page }) => {
+    const langSelect = page.locator('#tplLanguage');
+    await expect(langSelect).toBeVisible();
+    await expect(langSelect).toHaveValue('en');
+
+    // Check that multiple languages are available
+    const optionCount = await langSelect.locator('option').count();
+    expect(optionCount).toBeGreaterThan(10);
+  });
+
+  // ─── AUTHENTICATION ───────────────────────────────────
+
+  test('Authentication template shows preset body and security options', async ({ page }) => {
+    await selectTemplateType(page, 'Authentication');
+
+    // Body textarea should NOT be visible (preset by WhatsApp)
+    await expect(page.locator('#tplBody')).not.toBeVisible();
+
+    // Preset body info should be visible
+    await expect(page.locator('text=Preset body by WhatsApp')).toBeVisible();
+    await expect(page.locator('text=is your verification code')).toBeVisible();
+
+    // Security recommendation toggle
+    await expect(page.getByText('Security Recommendation', { exact: true })).toBeVisible();
+    await expect(page.locator('#tplSecurityRecommendation')).toBeVisible();
+
+    // Code expiration field
+    await expect(page.locator('#tplCodeExpiration')).toBeVisible();
+    await expect(page.locator('text=1–90 minutes')).toBeVisible();
+
+    // Category should be auto-set to AUTHENTICATION
+    await expect(page.locator('text=auto-set to AUTHENTICATION')).toBeVisible();
+  });
 
   test('Authentication template shows COPY_CODE button type', async ({ page }) => {
     await selectTemplateType(page, 'Authentication');
@@ -92,15 +139,21 @@ test.describe('Template Editor — Meta/WhatsApp/Twilio Alignment', () => {
     await expect(page.locator('button:has-text("Add Button")')).not.toBeVisible();
   });
 
-  test('Catalog template shows catalog_id field', async ({ page }) => {
+  // ─── CATALOG ──────────────────────────────────────────
+
+  test('Catalog template shows catalog_id and thumbnail_item_id fields', async ({ page }) => {
     await selectTemplateType(page, 'Catalog');
 
     await expect(page.locator('label:has-text("Catalog ID")')).toBeVisible();
     await expect(page.locator('#tplCatalogId')).toBeVisible();
     await expect(page.getByText('From Meta Commerce Manager. Required to link your product catalog.')).toBeVisible();
+
+    // Thumbnail Product ID
+    await expect(page.locator('label:has-text("Thumbnail Product ID")')).toBeVisible();
+    await expect(page.locator('#tplThumbnailItemId')).toBeVisible();
   });
 
-  // ─── LOW PRIORITY ────────────────────────────────────
+  // ─── LIST PICKER ──────────────────────────────────────
 
   test('List picker shows in-session only warning', async ({ page }) => {
     await selectTemplateType(page, 'List Picker');
@@ -111,12 +164,15 @@ test.describe('Template Editor — Meta/WhatsApp/Twilio Alignment', () => {
     ).toBeVisible();
   });
 
-  test('Carousel shows card editor with constraints', async ({ page }) => {
+  // ─── CAROUSEL ─────────────────────────────────────────
+
+  test('Carousel shows min 2 cards requirement', async ({ page }) => {
     await selectTemplateType(page, 'Carousel');
 
     await expect(page.locator('text=Carousel Cards')).toBeVisible();
+    await expect(page.locator('text=Min 2, max 10 cards')).toBeVisible();
     await expect(
-      page.locator('text=title + body max 160 chars combined')
+      page.locator('text=same number/type of buttons')
     ).toBeVisible();
 
     // Add a card
@@ -124,6 +180,8 @@ test.describe('Template Editor — Meta/WhatsApp/Twilio Alignment', () => {
     await expect(page.locator('text=Card 1')).toBeVisible();
     await expect(page.locator('text=/0\\/160/')).toBeVisible();
   });
+
+  // ─── QUICK REPLY ──────────────────────────────────────
 
   test('Quick reply allows up to 10 buttons', async ({ page }) => {
     await selectTemplateType(page, 'Quick Reply');
@@ -141,6 +199,8 @@ test.describe('Template Editor — Meta/WhatsApp/Twilio Alignment', () => {
     await expect(buttonInputs).toHaveCount(4);
   });
 
+  // ─── FOOTER ───────────────────────────────────────────
+
   test('Footer blocks variables', async ({ page }) => {
     await selectTemplateType(page, 'Card');
 
@@ -153,6 +213,35 @@ test.describe('Template Editor — Meta/WhatsApp/Twilio Alignment', () => {
 
     await expect(
       page.locator('text=Variables are not supported in footers')
+    ).toBeVisible();
+  });
+
+  // ─── URL BUTTON VALIDATIONS ───────────────────────────
+
+  test('URL button warns about shortened URLs', async ({ page }) => {
+    await selectTemplateType(page, 'Call to Action');
+
+    await page.click('button:has-text("Add Button")');
+
+    // Find URL input and type a shortened URL
+    const urlInput = page.locator('input[placeholder*="https://example.com"]');
+    await urlInput.fill('https://bit.ly/abc123');
+
+    await expect(
+      page.locator('text=Shortened URLs are always rejected by Meta')
+    ).toBeVisible();
+  });
+
+  test('URL button warns about variable not at end', async ({ page }) => {
+    await selectTemplateType(page, 'Call to Action');
+
+    await page.click('button:has-text("Add Button")');
+
+    const urlInput = page.locator('input[placeholder*="https://example.com"]');
+    await urlInput.fill('https://example.com/{{1}}/page');
+
+    await expect(
+      page.locator('text=must be at the end of the URL only')
     ).toBeVisible();
   });
 });

@@ -35,6 +35,8 @@ export interface TemplateButton {
 export interface CreateTemplateInput {
   name: string;
   type: string;
+  category?: 'MARKETING' | 'UTILITY' | 'AUTHENTICATION';
+  language?: string;
   body?: string;
   title?: string;
   variables?: string[];
@@ -42,12 +44,15 @@ export interface CreateTemplateInput {
   media_url?: string;
   media_type?: string;
   catalog_id?: string;
+  thumbnail_item_id?: string;
   carousel_cards?: Array<{
     title: string;
     body: string;
     mediaUrl: string;
     buttons: TemplateButton[];
   }>;
+  add_security_recommendation?: boolean;
+  code_expiration_minutes?: number;
 }
 
 /** Shape returned by the platform API */
@@ -124,11 +129,16 @@ export async function createTemplate(
   const platformBody: Record<string, unknown> = {
     friendly_name: input.name,
     type: input.type,
+    ...(input.category ? { category: input.category } : {}),
+    ...(input.language ? { language: input.language } : {}),
     content: {
       body: input.body,
       ...(input.title ? { title: input.title } : {}),
       ...(input.media_url ? { media: [input.media_url] } : {}),
       ...(input.catalog_id ? { catalog_id: input.catalog_id } : {}),
+      ...(input.thumbnail_item_id ? { thumbnail_item_id: input.thumbnail_item_id } : {}),
+      ...(input.add_security_recommendation !== undefined ? { add_security_recommendation: input.add_security_recommendation } : {}),
+      ...(input.code_expiration_minutes ? { code_expiration_minutes: input.code_expiration_minutes } : {}),
     },
   };
 

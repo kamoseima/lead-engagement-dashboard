@@ -13,6 +13,7 @@ import {
   ExternalLink,
   ArrowLeft,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { PhonePreview } from '@/components/shared/phone-preview';
 import { TemplateTypePicker } from '@/components/shared/template-type-picker';
@@ -23,6 +24,51 @@ import type {
   TemplateButton,
   CreateTemplateInput,
 } from '@/services/templates/template.service';
+
+/** WhatsApp template categories */
+type TemplateCategory = 'MARKETING' | 'UTILITY' | 'AUTHENTICATION';
+
+const CATEGORIES: { value: TemplateCategory; label: string; description: string }[] = [
+  { value: 'MARKETING', label: 'Marketing', description: 'Promotions, offers, announcements' },
+  { value: 'UTILITY', label: 'Utility', description: 'Order updates, confirmations, alerts' },
+  { value: 'AUTHENTICATION', label: 'Authentication', description: 'OTP codes, verification' },
+];
+
+/** Common WhatsApp-supported language codes */
+const LANGUAGES: { code: string; name: string }[] = [
+  { code: 'en', name: 'English' },
+  { code: 'en_US', name: 'English (US)' },
+  { code: 'en_GB', name: 'English (UK)' },
+  { code: 'af', name: 'Afrikaans' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'zh_CN', name: 'Chinese (Simplified)' },
+  { code: 'zh_TW', name: 'Chinese (Traditional)' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'id', name: 'Indonesian' },
+  { code: 'it', name: 'Italian' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'ms', name: 'Malay' },
+  { code: 'pt_BR', name: 'Portuguese (Brazil)' },
+  { code: 'pt_PT', name: 'Portuguese (Portugal)' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'es_AR', name: 'Spanish (Argentina)' },
+  { code: 'es_MX', name: 'Spanish (Mexico)' },
+  { code: 'sw', name: 'Swahili' },
+  { code: 'sv', name: 'Swedish' },
+  { code: 'th', name: 'Thai' },
+  { code: 'tr', name: 'Turkish' },
+  { code: 'ur', name: 'Urdu' },
+  { code: 'vi', name: 'Vietnamese' },
+  { code: 'zu', name: 'Zulu' },
+];
+
+/** Shortened URL domains that Meta always rejects */
+const SHORTENED_URL_DOMAINS = ['bit.ly', 'tinyurl.com', 'goo.gl', 't.co', 'ow.ly', 'is.gd', 'buff.ly', 'rebrand.ly', 'short.io'];
 
 type EditorMode = 'create' | 'edit';
 
@@ -47,6 +93,16 @@ interface TypeConfig {
   showCatalogId?: boolean;
   /** Show carousel card editor */
   showCarouselCards?: boolean;
+  /** Authentication: body is preset by WhatsApp */
+  presetBody?: boolean;
+  /** Show security recommendation toggle */
+  showSecurityRecommendation?: boolean;
+  /** Show code expiration field */
+  showCodeExpiration?: boolean;
+  /** Show thumbnail_item_id field (catalog) */
+  showThumbnailItemId?: boolean;
+  /** Forced category (e.g. authentication always = AUTHENTICATION) */
+  forcedCategory?: TemplateCategory;
 }
 
 const TYPE_CONFIG: Record<string, TypeConfig> = {
@@ -142,11 +198,11 @@ const TYPE_CONFIG: Record<string, TypeConfig> = {
     inSessionOnly: true,
   },
   authentication: {
-    hint: 'OTP / verification code template. Use a Copy Code button for auto-copy.',
+    hint: 'OTP / verification code template. Body is preset by WhatsApp — you can only configure security recommendation and code expiration.',
     showTitle: false,
-    showBody: true,
+    showBody: false,
     bodyLabel: 'Body',
-    bodyPlaceholder: 'Your verification code is {{1}}. It expires in 10 minutes.',
+    bodyPlaceholder: '',
     bodyMaxLength: 1024,
     showMedia: false,
     showButtons: true,
@@ -154,6 +210,10 @@ const TYPE_CONFIG: Record<string, TypeConfig> = {
     buttonHint: 'Copy Code button for OTP auto-copy. Max 1.',
     maxButtons: 1,
     showFooter: false,
+    presetBody: true,
+    showSecurityRecommendation: true,
+    showCodeExpiration: true,
+    forcedCategory: 'AUTHENTICATION',
   },
   catalog: {
     hint: 'Product catalog message. Requires a Catalog ID from Meta Commerce Manager.',
@@ -167,6 +227,7 @@ const TYPE_CONFIG: Record<string, TypeConfig> = {
     maxButtons: 0,
     showFooter: false,
     showCatalogId: true,
+    showThumbnailItemId: true,
   },
 };
 
@@ -208,13 +269,27 @@ export default function TemplatesPage() {
     {}
   );
   const [catalogId, setCatalogId] = useState('');
+  const [thumbnailItemId, setThumbnailItemId] = useState('');
   const [carouselCards, setCarouselCards] = useState<
     Array<{ title: string; body: string; mediaUrl: string; buttons: TemplateButton[] }>
   >([]);
   const [footerError, setFooterError] = useState('');
+  const [category, setCategory] = useState<TemplateCategory>('MARKETING');
+  const [language, setLanguage] = useState('en');
+  const [addSecurityRecommendation, setAddSecurityRecommendation] = useState(false);
+  const [codeExpirationMinutes, setCodeExpirationMinutes] = useState<number | ''>('');
+  const [saveErrors, setSaveErrors] = useState<string[]>([]);
 
   // Derived config for current type
   const cfg = TYPE_CONFIG[type] || DEFAULT_CONFIG;
+
+  // Force category for certain template types
+  const effectiveCategory = cfg.forcedCategory || category;
+
+  // Body max length: marketing/utility approved templates have 550-char limit on CTA,
+  // but base limits remain per-type. Marketing/utility categories cap at 1024,
+  // CTA caps at 640 regardless of category.
+  const effectiveBodyMaxLength = cfg.bodyMaxLength;
 
   // ── Load templates ───────────────────────────────────────
   const loadTemplates = useCallback(async () => {
@@ -247,8 +322,14 @@ export default function TemplatesPage() {
     setVariableNames({});
     setEditingTemplate(null);
     setCatalogId('');
+    setThumbnailItemId('');
     setCarouselCards([]);
     setFooterError('');
+    setCategory('MARKETING');
+    setLanguage('en');
+    setAddSecurityRecommendation(false);
+    setCodeExpirationMinutes('');
+    setSaveErrors([]);
   };
 
   const openCreate = () => {
@@ -284,21 +365,102 @@ export default function TemplatesPage() {
     resetEditor();
   };
 
+  /** Check if a URL uses a shortened domain */
+  const isShortenedUrl = (url: string) => {
+    try {
+      const hostname = new URL(url).hostname.toLowerCase();
+      return SHORTENED_URL_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d));
+    } catch {
+      return false;
+    }
+  };
+
+  /** Check if URL variables are only at the end */
+  const hasVariableNotAtEnd = (url: string) => {
+    // Variables like {{1}} should only appear at the very end of the URL
+    const varPattern = /\{\{\d+\}\}/g;
+    const matches = [...url.matchAll(varPattern)];
+    if (matches.length === 0) return false;
+    // The last variable should end at the string end
+    const lastMatch = matches[matches.length - 1];
+    const afterLast = url.substring(lastMatch.index! + lastMatch[0].length);
+    // If there's a variable NOT at the end, or if there are multiple variables
+    if (afterLast.trim().length > 0) return true;
+    // Check if any variable appears in the middle (not the last one)
+    if (matches.length > 1) return true;
+    return false;
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    const errors: string[] = [];
 
     // Validate footer has no variables
     if (footer && /\{\{\d+\}\}/.test(footer)) {
       setFooterError('Variables are not supported in footers.');
+      errors.push('Footer contains variables.');
+    }
+
+    // Carousel: minimum 2 cards
+    if (cfg.showCarouselCards && carouselCards.length < 2 && carouselCards.length > 0) {
+      errors.push('Carousel requires at least 2 cards.');
+    }
+
+    // Carousel: cross-card consistency
+    if (cfg.showCarouselCards && carouselCards.length >= 2) {
+      const firstCardButtonCount = carouselCards[0].buttons.length;
+      const firstCardButtonTypes = carouselCards[0].buttons.map(b => b.type).join(',');
+      const firstCardMediaType = carouselCards[0].mediaUrl ? 'has_media' : 'no_media';
+
+      for (let i = 1; i < carouselCards.length; i++) {
+        if (carouselCards[i].buttons.length !== firstCardButtonCount) {
+          errors.push(`Card ${i + 1} must have the same number of buttons as Card 1 (${firstCardButtonCount}).`);
+        }
+        if (carouselCards[i].buttons.map(b => b.type).join(',') !== firstCardButtonTypes) {
+          errors.push(`Card ${i + 1} button types must match Card 1 order.`);
+        }
+        const cardMediaType = carouselCards[i].mediaUrl ? 'has_media' : 'no_media';
+        if (cardMediaType !== firstCardMediaType) {
+          errors.push(`All cards must have the same media presence.`);
+          break;
+        }
+      }
+    }
+
+    // URL button validations
+    if (cfg.showButtons && buttons.length > 0) {
+      buttons.forEach((btn, i) => {
+        if (btn.type === 'URL' && btn.url) {
+          if (isShortenedUrl(btn.url)) {
+            errors.push(`Button ${i + 1}: Shortened URLs (bit.ly, etc.) are always rejected by Meta.`);
+          }
+          if (hasVariableNotAtEnd(btn.url)) {
+            errors.push(`Button ${i + 1}: URL variables ({{1}}) are only allowed at the end of the URL.`);
+          }
+        }
+      });
+    }
+
+    // Authentication: code expiration validation
+    if (cfg.showCodeExpiration && codeExpirationMinutes !== '' &&
+        (codeExpirationMinutes < 1 || codeExpirationMinutes > 90)) {
+      errors.push('Code expiration must be between 1 and 90 minutes.');
+    }
+
+    if (errors.length > 0) {
+      setSaveErrors(errors);
       return;
     }
 
+    setSaveErrors([]);
     setIsSaving(true);
 
     const input: CreateTemplateInput = {
       name,
       type,
-      body: body || undefined,
+      category: effectiveCategory,
+      language,
+      body: cfg.presetBody ? undefined : (body || undefined),
       title: cfg.showTitle ? title || undefined : undefined,
       media_url: cfg.showMedia ? mediaUrl || undefined : undefined,
       media_type: cfg.showMedia ? mediaType : undefined,
@@ -308,9 +470,12 @@ export default function TemplatesPage() {
           ? Object.values(variableNames)
           : undefined,
       ...(cfg.showCatalogId && catalogId ? { catalog_id: catalogId } : {}),
+      ...(cfg.showThumbnailItemId && thumbnailItemId ? { thumbnail_item_id: thumbnailItemId } : {}),
       ...(cfg.showCarouselCards && carouselCards.length > 0
         ? { carousel_cards: carouselCards }
         : {}),
+      ...(cfg.showSecurityRecommendation ? { add_security_recommendation: addSecurityRecommendation } : {}),
+      ...(cfg.showCodeExpiration && codeExpirationMinutes !== '' ? { code_expiration_minutes: codeExpirationMinutes } : {}),
     };
 
     try {
@@ -402,6 +567,60 @@ export default function TemplatesPage() {
                   name.
                 </p>
               </div>
+
+              {/* Category */}
+              <div className="grid gap-2">
+                <Label htmlFor="tplCategory">Category</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {CATEGORIES.map((cat) => {
+                    const isActive = effectiveCategory === cat.value;
+                    const isForced = cfg.forcedCategory === cat.value;
+                    return (
+                      <button
+                        key={cat.value}
+                        type="button"
+                        disabled={!!cfg.forcedCategory && !isForced}
+                        onClick={() => !cfg.forcedCategory && setCategory(cat.value)}
+                        className={`rounded-lg border p-2.5 text-left transition-colors ${
+                          isActive
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border hover:border-primary/30'
+                        } ${cfg.forcedCategory && !isForced ? 'opacity-40 cursor-not-allowed' : ''}`}
+                      >
+                        <span className={`text-xs font-medium ${isActive ? 'text-primary' : ''}`}>
+                          {cat.label}
+                        </span>
+                        <p className="text-[10px] text-muted-foreground">{cat.description}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+                {cfg.forcedCategory && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Category is auto-set to {cfg.forcedCategory} for this template type.
+                  </p>
+                )}
+              </div>
+
+              {/* Language */}
+              <div className="grid gap-2">
+                <Label htmlFor="tplLanguage">Language</Label>
+                <select
+                  id="tplLanguage"
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {LANGUAGES.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.name} ({lang.code})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-muted-foreground">
+                  Required for WhatsApp template approval. Must match the message language.
+                </p>
+              </div>
             </section>
 
             {/* Template Type */}
@@ -452,7 +671,7 @@ export default function TemplatesPage() {
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
                     rows={5}
-                    maxLength={cfg.bodyMaxLength}
+                    maxLength={effectiveBodyMaxLength}
                   />
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-muted-foreground">
@@ -460,9 +679,67 @@ export default function TemplatesPage() {
                       *bold*, _italic_, ~strike~.
                     </p>
                     <span className="text-[10px] text-muted-foreground">
-                      {body.length}/{cfg.bodyMaxLength}
+                      {body.length}/{effectiveBodyMaxLength}
                     </span>
                   </div>
+                </div>
+              )}
+
+              {/* Authentication preset body info */}
+              {cfg.presetBody && (
+                <div className="rounded-md border border-border bg-muted/30 px-3 py-2.5">
+                  <p className="text-xs font-medium">Preset body by WhatsApp</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground italic">
+                    &quot;{'{{1}}'} is your verification code.&quot;
+                  </p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    WhatsApp auto-generates the body. You cannot customise it.
+                  </p>
+                </div>
+              )}
+
+              {/* Security Recommendation (authentication) */}
+              {cfg.showSecurityRecommendation && (
+                <div className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2.5">
+                  <div>
+                    <p className="text-xs font-medium">Security Recommendation</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Appends &quot;Do not share this code&quot; to the message.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      id="tplSecurityRecommendation"
+                      checked={addSecurityRecommendation}
+                      onChange={(e) => setAddSecurityRecommendation(e.target.checked)}
+                      className="peer sr-only"
+                    />
+                    <div className="peer h-5 w-9 rounded-full bg-muted after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-primary peer-checked:after:translate-x-full" />
+                  </label>
+                </div>
+              )}
+
+              {/* Code Expiration (authentication) */}
+              {cfg.showCodeExpiration && (
+                <div className="grid gap-2">
+                  <Label htmlFor="tplCodeExpiration">Code Expiration (minutes)</Label>
+                  <Input
+                    id="tplCodeExpiration"
+                    type="number"
+                    min={1}
+                    max={90}
+                    placeholder="e.g. 10"
+                    value={codeExpirationMinutes}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCodeExpirationMinutes(val === '' ? '' : parseInt(val, 10));
+                    }}
+                    className="w-32"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    1–90 minutes. Appends &quot;This code expires in X minutes&quot; to the message.
+                  </p>
                 </div>
               )}
 
@@ -558,6 +835,21 @@ export default function TemplatesPage() {
                     From Meta Commerce Manager. Required to link your product catalog.
                   </p>
                 </div>
+                {cfg.showThumbnailItemId && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="tplThumbnailItemId">Thumbnail Product ID</Label>
+                    <Input
+                      id="tplThumbnailItemId"
+                      placeholder="e.g. SKU-12345"
+                      value={thumbnailItemId}
+                      onChange={(e) => setThumbnailItemId(e.target.value)}
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Optional. The product retailer ID to use as the thumbnail image.
+                    </p>
+                  </div>
+                )}
               </section>
             )}
 
@@ -584,7 +876,8 @@ export default function TemplatesPage() {
                   )}
                 </div>
                 <p className="text-[10px] text-muted-foreground">
-                  Up to 10 cards. Each card: title + body max 160 chars combined, media required, 1–2 buttons.
+                  Min 2, max 10 cards. Each card: title + body max 160 chars combined, media required, 1–2 buttons.
+                  All cards must have the same number/type of buttons and same media type.
                 </p>
                 {carouselCards.map((card, ci) => {
                   const combinedLen = card.title.length + card.body.length;
@@ -680,6 +973,18 @@ export default function TemplatesPage() {
                 onChange={setVariableNames}
               />
             </section>
+
+            {/* Validation errors */}
+            {saveErrors.length > 0 && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 space-y-1">
+                <p className="text-xs font-medium text-destructive flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5" /> Validation Errors
+                </p>
+                {saveErrors.map((err, i) => (
+                  <p key={i} className="text-[11px] text-destructive/80">• {err}</p>
+                ))}
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex items-center gap-3 pb-8">
