@@ -16,7 +16,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { PhonePreview } from '@/components/shared/phone-preview';
-import { TemplateTypePicker } from '@/components/shared/template-type-picker';
+import { TemplateTypePicker, TEMPLATE_TYPES } from '@/components/shared/template-type-picker';
 import { ButtonEditor } from '@/components/shared/button-editor';
 import { VariableEditor } from '@/components/shared/variable-editor';
 import type {
@@ -286,10 +286,18 @@ export default function TemplatesPage() {
   // Force category for certain template types
   const effectiveCategory = cfg.forcedCategory || category;
 
-  // Body max length: marketing/utility approved templates have 550-char limit on CTA,
-  // but base limits remain per-type. Marketing/utility categories cap at 1024,
-  // CTA caps at 640 regardless of category.
+  // Body max length per-type config
   const effectiveBodyMaxLength = cfg.bodyMaxLength;
+
+  // Reset type when category changes and current type isn't valid for the new category
+  useEffect(() => {
+    const currentTypeDef = TEMPLATE_TYPES.find(t => t.value === type);
+    if (currentTypeDef?.categories && !currentTypeDef.categories.includes(effectiveCategory)) {
+      // Pick the first type that's valid for this category
+      const fallback = TEMPLATE_TYPES.find(t => t.categories?.includes(effectiveCategory));
+      if (fallback) setType(fallback.value);
+    }
+  }, [effectiveCategory, type]);
 
   // ── Load templates ───────────────────────────────────────
   const loadTemplates = useCallback(async () => {
@@ -628,7 +636,7 @@ export default function TemplatesPage() {
               <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
                 Template Type
               </h2>
-              <TemplateTypePicker value={type} onChange={setType} />
+              <TemplateTypePicker value={type} onChange={setType} category={effectiveCategory} />
             </section>
 
             {/* Content */}

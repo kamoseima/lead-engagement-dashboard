@@ -22,7 +22,21 @@ async function clickNewTemplate(page: Page) {
   await page.waitForSelector('text=Basic Info');
 }
 
+/** Map of template types that require a specific category to be selected first */
+const TYPE_CATEGORY_MAP: Record<string, string> = {
+  'Authentication': 'Authentication',
+  'Carousel': 'Marketing',
+  'Catalog': 'Marketing',
+};
+
 async function selectTemplateType(page: Page, typeLabel: string) {
+  // Some types require selecting a category first
+  const requiredCategory = TYPE_CATEGORY_MAP[typeLabel];
+  if (requiredCategory) {
+    const basicInfo = page.locator('section:has(h2:has-text("Basic Info"))');
+    await basicInfo.locator(`button:has-text("${requiredCategory}")`).click();
+  }
+
   // Click within the Template Type section, matching the label span exactly
   const typeSection = page.locator('section:has(h2:has-text("Template Type"))');
   await typeSection.locator(`button`, { has: page.locator(`span.text-xs:text-is("${typeLabel}")`) }).click();
