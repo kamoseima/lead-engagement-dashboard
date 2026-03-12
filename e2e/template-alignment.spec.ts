@@ -135,8 +135,10 @@ test.describe('Template Editor — Meta/WhatsApp/Twilio Alignment', () => {
     await expect(page.locator('#tplCodeExpiration')).toBeVisible();
     await expect(page.locator('text=1–90 minutes')).toBeVisible();
 
-    // Category should be auto-set to AUTHENTICATION
-    await expect(page.locator('text=auto-set to AUTHENTICATION')).toBeVisible();
+    // Category should be auto-set to AUTHENTICATION (the button is active)
+    const basicInfo = page.locator('section:has(h2:has-text("Basic Info"))');
+    const authCatBtn = basicInfo.locator('button:has-text("Authentication")');
+    await expect(authCatBtn).toHaveClass(/border-primary/);
   });
 
   test('Authentication template shows COPY_CODE button type', async ({ page }) => {

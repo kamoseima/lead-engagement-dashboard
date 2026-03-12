@@ -283,21 +283,24 @@ export default function TemplatesPage() {
   // Derived config for current type
   const cfg = TYPE_CONFIG[type] || DEFAULT_CONFIG;
 
-  // Force category for certain template types
-  const effectiveCategory = cfg.forcedCategory || category;
-
   // Body max length per-type config
   const effectiveBodyMaxLength = cfg.bodyMaxLength;
 
-  // Reset type when category changes and current type isn't valid for the new category
+  // When a type with forcedCategory is selected, auto-set the category to match
+  useEffect(() => {
+    if (cfg.forcedCategory && category !== cfg.forcedCategory) {
+      setCategory(cfg.forcedCategory);
+    }
+  }, [type, cfg.forcedCategory, category]);
+
+  // When category changes and current type isn't valid, reset type
   useEffect(() => {
     const currentTypeDef = TEMPLATE_TYPES.find(t => t.value === type);
-    if (currentTypeDef?.categories && !currentTypeDef.categories.includes(effectiveCategory)) {
-      // Pick the first type that's valid for this category
-      const fallback = TEMPLATE_TYPES.find(t => t.categories?.includes(effectiveCategory));
+    if (currentTypeDef?.categories && !currentTypeDef.categories.includes(category)) {
+      const fallback = TEMPLATE_TYPES.find(t => t.categories?.includes(category));
       if (fallback) setType(fallback.value);
     }
-  }, [effectiveCategory, type]);
+  }, [category, type]);
 
   // ── Load templates ───────────────────────────────────────
   const loadTemplates = useCallback(async () => {
@@ -466,7 +469,7 @@ export default function TemplatesPage() {
     const input: CreateTemplateInput = {
       name,
       type,
-      category: effectiveCategory,
+      category: category,
       language,
       body: cfg.presetBody ? undefined : (body || undefined),
       title: cfg.showTitle ? title || undefined : undefined,
@@ -581,19 +584,17 @@ export default function TemplatesPage() {
                 <Label htmlFor="tplCategory">Category</Label>
                 <div className="grid grid-cols-3 gap-2">
                   {CATEGORIES.map((cat) => {
-                    const isActive = effectiveCategory === cat.value;
-                    const isForced = cfg.forcedCategory === cat.value;
+                    const isActive = category === cat.value;
                     return (
                       <button
                         key={cat.value}
                         type="button"
-                        disabled={!!cfg.forcedCategory && !isForced}
-                        onClick={() => !cfg.forcedCategory && setCategory(cat.value)}
+                        onClick={() => setCategory(cat.value)}
                         className={`rounded-lg border p-2.5 text-left transition-colors ${
                           isActive
                             ? 'border-primary bg-primary/10'
                             : 'border-border hover:border-primary/30'
-                        } ${cfg.forcedCategory && !isForced ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        }`}
                       >
                         <span className={`text-xs font-medium ${isActive ? 'text-primary' : ''}`}>
                           {cat.label}
@@ -603,11 +604,6 @@ export default function TemplatesPage() {
                     );
                   })}
                 </div>
-                {cfg.forcedCategory && (
-                  <p className="text-[10px] text-muted-foreground">
-                    Category is auto-set to {cfg.forcedCategory} for this template type.
-                  </p>
-                )}
               </div>
 
               {/* Language */}
@@ -636,7 +632,7 @@ export default function TemplatesPage() {
               <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
                 Template Type
               </h2>
-              <TemplateTypePicker value={type} onChange={setType} category={effectiveCategory} />
+              <TemplateTypePicker value={type} onChange={setType} category={category} />
             </section>
 
             {/* Content */}
