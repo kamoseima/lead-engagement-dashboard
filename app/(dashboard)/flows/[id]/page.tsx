@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,7 +29,9 @@ import type { FlowStep } from '@/types/database';
 export default function FlowEditorPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const flowId = params.id as string;
+  const isNewFlow = searchParams.get('new') === 'true';
 
   const {
     flow,
@@ -83,6 +85,10 @@ export default function FlowEditorPage() {
         const tplJson = await tplRes.json();
         if (flowJson.success) setFlow(flowJson.data);
         if (tplJson.success) setTemplates(tplJson.data);
+        // Mark newly created flows as unsaved so back-nav prompts
+        if (isNewFlow) {
+          useFlowEditorStore.setState({ hasChanges: true });
+        }
       } catch {
         // handle error silently
       } finally {
@@ -90,7 +96,7 @@ export default function FlowEditorPage() {
       }
     };
     load();
-  }, [flowId, setFlow, setTemplates, setLoading]);
+  }, [flowId, isNewFlow, setFlow, setTemplates, setLoading]);
 
   const handleSave = useCallback(async () => {
     if (!flow) return;

@@ -45,20 +45,29 @@ export default function FlowsPage() {
     }
   };
 
+  const getNextFlowName = () => {
+    const base = 'Untitled Flow';
+    const existing = new Set(flows.map(f => f.name));
+    if (!existing.has(base)) return base;
+    let i = 2;
+    while (existing.has(`${base} (${i})`)) i++;
+    return `${base} (${i})`;
+  };
+
   const handleCreateNew = async () => {
     try {
       const res = await fetch('/api/v1/flows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: 'Untitled Flow',
+          name: getNextFlowName(),
           steps: [],
         }),
       });
       const json = await res.json();
       if (json.success) {
-        // Navigate to flow editor
-        window.location.href = `/flows/${json.data.id}`;
+        // Navigate to flow editor with new flag for unsaved prompt
+        window.location.href = `/flows/${json.data.id}?new=true`;
       }
     } catch {
       // handle error
