@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { GitBranch, Plus, Search, ChevronRight, Trash2 } from 'lucide-react';
+import { useConfirmDialog } from '@/components/shared/confirm-dialog';
 import type { Flow } from '@/types/database';
 import Link from 'next/link';
 
@@ -25,6 +26,7 @@ export default function FlowsPage() {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [ConfirmDialog, confirm] = useConfirmDialog();
 
   useEffect(() => {
     loadFlows();
@@ -67,7 +69,13 @@ export default function FlowsPage() {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!confirm('Delete this flow?')) return;
+    const confirmed = await confirm({
+      title: 'Delete Flow',
+      description: 'Are you sure you want to delete this flow? This action cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
 
     try {
       await fetch(`/api/v1/flows/${id}`, { method: 'DELETE' });
@@ -82,6 +90,8 @@ export default function FlowsPage() {
   );
 
   return (
+    <>
+    <ConfirmDialog />
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -157,5 +167,6 @@ export default function FlowsPage() {
         </div>
       )}
     </div>
+    </>
   );
 }

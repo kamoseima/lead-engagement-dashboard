@@ -23,6 +23,7 @@ import { FlowStepNode } from '@/components/shared/flow-step-node';
 import { FlowPhonePreview } from '@/components/shared/flow-phone-preview';
 import { AiChatPanel } from '@/components/flows/ai-chat-panel';
 import { useFlowEditorStore, pathEquals } from '@/lib/stores/flow-editor-store';
+import { useConfirmDialog } from '@/components/shared/confirm-dialog';
 import type { FlowStep } from '@/types/database';
 
 export default function FlowEditorPage() {
@@ -53,6 +54,21 @@ export default function FlowEditorPage() {
     setPreviewMode,
     setAiPanelOpen,
   } = useFlowEditorStore();
+
+  const [ConfirmDialog, confirm] = useConfirmDialog();
+
+  const handleBack = useCallback(async () => {
+    if (hasChanges) {
+      const confirmed = await confirm({
+        title: 'Unsaved Changes',
+        description: 'You have unsaved changes. Are you sure you want to leave? Your changes will be lost.',
+        confirmLabel: 'Leave',
+        variant: 'destructive',
+      });
+      if (!confirmed) return;
+    }
+    router.push('/flows');
+  }, [hasChanges, confirm, router]);
 
   // Load flow + templates in parallel
   useEffect(() => {
@@ -129,7 +145,7 @@ export default function FlowEditorPage() {
         <Button
           variant="outline"
           className="mt-4"
-          onClick={() => router.push('/flows')}
+          onClick={handleBack}
         >
           Back to Flows
         </Button>
@@ -138,6 +154,8 @@ export default function FlowEditorPage() {
   }
 
   return (
+    <>
+    <ConfirmDialog />
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -145,7 +163,7 @@ export default function FlowEditorPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push('/flows')}
+            onClick={handleBack}
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -464,5 +482,6 @@ export default function FlowEditorPage() {
         </div>
       )}
     </div>
+    </>
   );
 }

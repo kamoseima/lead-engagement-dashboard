@@ -4,6 +4,7 @@ import { useState, useEffect, use, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirmDialog } from '@/components/shared/confirm-dialog';
 import {
   ArrowLeft,
   Megaphone,
@@ -88,6 +89,7 @@ export default function CampaignDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const [ConfirmDialog, confirmAction] = useConfirmDialog();
   const [campaign, setCampaign] = useState<CampaignWithCreator | null>(null);
   const [sends, setSends] = useState<CampaignSend[]>([]);
   const [currentUser, setCurrentUser] = useState<DashboardUser | null>(null);
@@ -155,7 +157,12 @@ export default function CampaignDetailPage({
 
   // Resend handlers
   const handleResendNow = async () => {
-    if (!confirm('Resend this campaign to all recipients now?')) return;
+    const confirmed = await confirmAction({
+      title: 'Resend Campaign',
+      description: 'This will resend the campaign to all recipients immediately. Are you sure?',
+      confirmLabel: 'Resend Now',
+    });
+    if (!confirmed) return;
     setIsResending(true);
     try {
       const res = await fetch(`/api/v1/campaigns/${id}/resend`, { method: 'POST' });
@@ -189,7 +196,13 @@ export default function CampaignDetailPage({
   };
 
   const handleStop = async () => {
-    if (!confirm('Stop this campaign? Any remaining scheduled sends will not be processed.')) return;
+    const confirmed = await confirmAction({
+      title: 'Stop Campaign',
+      description: 'Any remaining scheduled sends will not be processed. This action cannot be undone.',
+      confirmLabel: 'Stop Campaign',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
     setIsStopping(true);
     try {
       const res = await fetch(`/api/v1/campaigns/${id}/stop`, { method: 'POST' });
@@ -234,6 +247,8 @@ export default function CampaignDetailPage({
     : <MessageSquare className="h-4 w-4 text-green-500" />;
 
   return (
+    <>
+    <ConfirmDialog />
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -670,5 +685,6 @@ export default function CampaignDetailPage({
         )}
       </div>
     </div>
+    </>
   );
 }
