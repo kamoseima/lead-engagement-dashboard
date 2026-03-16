@@ -12,6 +12,8 @@ interface FlowPhonePreviewProps {
   templates: Template[];
   businessName?: string;
   className?: string;
+  /** When set, show only this single step's template in the preview */
+  focusedStep?: FlowStep | null;
 }
 
 /** A single message in the conversation timeline */
@@ -121,14 +123,21 @@ export function FlowPhonePreview({
   templates,
   businessName = 'Lead Engage',
   className,
+  focusedStep,
 }: FlowPhonePreviewProps) {
   // Track which branch the user has selected at each branching step (keyed by path)
   const [branchChoices, setBranchChoices] = useState<Record<string, number>>({});
   const chatRef = useRef<HTMLDivElement>(null);
 
+  // When a single step is focused, show only that step's template
+  const effectiveSteps = useMemo(
+    () => (focusedStep ? [focusedStep] : steps),
+    [focusedStep, steps]
+  );
+
   const conversation = useMemo(
-    () => buildConversation(steps, templates, branchChoices, { n: 0 }, ''),
-    [steps, templates, branchChoices]
+    () => buildConversation(effectiveSteps, templates, branchChoices, { n: 0 }, ''),
+    [effectiveSteps, templates, branchChoices]
   );
 
   // Auto-scroll to bottom when conversation changes

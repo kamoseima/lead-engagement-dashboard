@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,29 +17,47 @@ import {
   X,
   Pin,
   PinOff,
+  Bot,
 } from 'lucide-react';
 import { FlowStepNode } from '@/components/shared/flow-step-node';
 import { FlowPhonePreview } from '@/components/shared/flow-phone-preview';
-import type { Flow, FlowStep, FlowFallback } from '@/types/database';
-import type { Template } from '@/services/templates/template.service';
+import { AiChatPanel } from '@/components/flows/ai-chat-panel';
+import { useFlowEditorStore, pathEquals } from '@/lib/stores/flow-editor-store';
+import type { FlowStep } from '@/types/database';
 
 export default function FlowEditorPage() {
   const params = useParams();
   const router = useRouter();
   const flowId = params.id as string;
 
-  const [flow, setFlow] = useState<Flow | null>(null);
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-  // Preview modes: 'closed' | 'floating' | 'pinned'
-  const [previewMode, setPreviewMode] = useState<'closed' | 'floating' | 'pinned'>('closed');
+  const {
+    flow,
+    templates,
+    isLoading,
+    isSaving,
+    hasChanges,
+    previewMode,
+    selectedPath,
+    selectedStep,
+    aiPanelOpen,
+    setFlow,
+    setTemplates,
+    setLoading,
+    setSaving,
+    updateFlow,
+    addRootStep,
+    removeStep,
+    updateStep,
+    updateFallback,
+    selectStep,
+    setPreviewMode,
+    setAiPanelOpen,
+  } = useFlowEditorStore();
 
   // Load flow + templates in parallel
   useEffect(() => {
     const load = async () => {
-      setIsLoading(true);
+      setLoading(true);
       try {
         const [flowRes, tplRes] = await Promise.all([
           fetch(`/api/v1/flows/${flowId}`),
@@ -52,15 +70,15 @@ export default function FlowEditorPage() {
       } catch {
         // handle error silently
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
     load();
-  }, [flowId]);
+  }, [flowId, setFlow, setTemplates, setLoading]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!flow) return;
-    setIsSaving(true);
+    setSaving(true);
     try {
       await fetch(`/api/v1/flows/${flowId}`, {
         method: 'PATCH',
@@ -72,42 +90,28 @@ export default function FlowEditorPage() {
           fallback: flow.fallback,
         }),
       });
-      setHasChanges(false);
+      useFlowEditorStore.setState({ hasChanges: false });
     } catch {
       // handle error silently
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
-  };
+  }, [flow, flowId, setSaving]);
 
-  const updateFlow = useCallback((updates: Partial<Flow>) => {
-    setFlow((prev) => (prev ? { ...prev, ...updates } : null));
-    setHasChanges(true);
-  }, []);
+  // Handlers for FlowStepNode (adapt path-based store to index-based component)
+  const handleUpdateStep = useCallback(
+    (index: number, updates: Partial<FlowStep>) => {
+      updateStep([index], updates);
+    },
+    [updateStep]
+  );
 
-  const addStep = () => {
-    if (!flow) return;
-    const newStep: FlowStep = { template: '', label: 'New Step' };
-    updateFlow({ steps: [...flow.steps, newStep] });
-  };
-
-  const removeStep = (index: number) => {
-    if (!flow) return;
-    updateFlow({ steps: flow.steps.filter((_, i) => i !== index) });
-  };
-
-  const updateStep = (index: number, updates: Partial<FlowStep>) => {
-    if (!flow) return;
-    const newSteps = [...flow.steps];
-    newSteps[index] = { ...newSteps[index], ...updates };
-    updateFlow({ steps: newSteps });
-  };
-
-  const updateFallback = (updates: Partial<FlowFallback>) => {
-    if (!flow) return;
-    const current = flow.fallback || { template: '', delayMinutes: 60 };
-    updateFlow({ fallback: { ...current, ...updates } });
-  };
+  const handleRemoveStep = useCallback(
+    (index: number) => {
+      removeStep([index]);
+    },
+    [removeStep]
+  );
 
   if (isLoading) {
     return (
@@ -153,18 +157,39 @@ export default function FlowEditorPage() {
             />
           </div>
         </div>
-        <Button onClick={handleSave} disabled={isSaving || !hasChanges}>
-          {isSaving ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="mr-2 h-4 w-4" />
-          )}
-          {isSaving ? 'Saving...' : 'Save'}
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* AI Chat toggle */}
+          <Button
+            variant={aiPanelOpen ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setAiPanelOpen(!aiPanelOpen)}
+          >
+            <Bot className="mr-1.5 h-3.5 w-3.5" />
+            AI Builder
+          </Button>
+          <Button onClick={handleSave} disabled={isSaving || !hasChanges}>
+            {isSaving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            {isSaving ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
       </div>
 
-      {/* Layout: full-width when closed/floating, 2-col when pinned */}
-      <div className={previewMode === 'pinned' ? 'grid gap-6 lg:grid-cols-[1fr_360px]' : ''}>
+      {/* Layout: main + optional side panels */}
+      <div
+        className={`grid gap-6 ${
+          previewMode === 'pinned' && aiPanelOpen
+            ? 'lg:grid-cols-[1fr_360px_340px]'
+            : previewMode === 'pinned'
+              ? 'lg:grid-cols-[1fr_360px]'
+              : aiPanelOpen
+                ? 'lg:grid-cols-[1fr_340px]'
+                : ''
+        }`}
+      >
         {/* ─── Flow Builder ─── */}
         <div className="space-y-6">
           {/* Description */}
@@ -186,7 +211,7 @@ export default function FlowEditorPage() {
               <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
                 Steps ({flow.steps.length})
               </h2>
-              <Button variant="outline" size="sm" onClick={addStep}>
+              <Button variant="outline" size="sm" onClick={addRootStep}>
                 <Plus className="mr-1.5 h-3 w-3" />
                 Add Step
               </Button>
@@ -202,7 +227,7 @@ export default function FlowEditorPage() {
                   variant="outline"
                   size="sm"
                   className="mt-3"
-                  onClick={addStep}
+                  onClick={addRootStep}
                 >
                   <Plus className="mr-1.5 h-3 w-3" />
                   Add Step
@@ -217,10 +242,27 @@ export default function FlowEditorPage() {
                     stepIndex={index}
                     depth={0}
                     templates={templates}
-                    onUpdate={(u) => updateStep(index, u)}
-                    onRemove={() => removeStep(index)}
-                    onAddStep={addStep}
+                    onUpdate={(u) => handleUpdateStep(index, u)}
+                    onRemove={() => handleRemoveStep(index)}
+                    onAddStep={addRootStep}
                     isLast={index === flow.steps.length - 1}
+                    isSelected={
+                      selectedPath !== null &&
+                      selectedPath.length === 1 &&
+                      selectedPath[0] === index
+                    }
+                    onSelect={() => {
+                      const currentPath = selectedPath;
+                      const newPath = [index];
+                      if (currentPath && pathEquals(currentPath, newPath)) {
+                        selectStep(null); // deselect on re-click
+                      } else {
+                        selectStep(newPath);
+                      }
+                    }}
+                    onSelectChild={(branchIndex, stepIndex) => {
+                      selectStep([index, branchIndex, stepIndex]);
+                    }}
                   />
                 ))}
               </div>
@@ -283,9 +325,21 @@ export default function FlowEditorPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Smartphone className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-xs font-semibold">Flow Preview</span>
+                  <span className="text-xs font-semibold">
+                    {selectedStep ? 'Step Preview' : 'Flow Preview'}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1">
+                  {selectedStep && (
+                    <button
+                      type="button"
+                      onClick={() => selectStep(null)}
+                      title="Show full flow"
+                      className="rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      Full flow
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setPreviewMode('pinned')}
@@ -307,10 +361,22 @@ export default function FlowEditorPage() {
               <FlowPhonePreview
                 steps={flow.steps}
                 templates={templates}
+                focusedStep={selectedStep}
               />
               <p className="text-center text-[10px] text-muted-foreground">
-                Click buttons to explore branches
+                {selectedStep
+                  ? 'Showing selected step'
+                  : 'Click buttons to explore branches'}
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* ─── AI Chat Panel (inline column) ─── */}
+        {aiPanelOpen && (
+          <div className="hidden lg:block">
+            <div className="sticky top-6 h-[calc(100vh-120px)] overflow-hidden rounded-xl border border-border bg-card">
+              <AiChatPanel />
             </div>
           </div>
         )}
@@ -341,9 +407,21 @@ export default function FlowEditorPage() {
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="flex items-center gap-2">
                 <Smartphone className="h-4 w-4 text-primary" />
-                <span className="text-sm font-semibold">Flow Preview</span>
+                <span className="text-sm font-semibold">
+                  {selectedStep ? 'Step Preview' : 'Flow Preview'}
+                </span>
               </div>
               <div className="flex items-center gap-1">
+                {selectedStep && (
+                  <button
+                    type="button"
+                    onClick={() => selectStep(null)}
+                    title="Show full flow"
+                    className="rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    Full flow
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setPreviewMode('pinned')}
@@ -367,13 +445,23 @@ export default function FlowEditorPage() {
               <FlowPhonePreview
                 steps={flow.steps}
                 templates={templates}
+                focusedStep={selectedStep}
               />
               <p className="mt-2 text-center text-[10px] text-muted-foreground">
-                Click buttons to explore branches
+                {selectedStep
+                  ? 'Showing selected step'
+                  : 'Click buttons to explore branches'}
               </p>
             </div>
           </div>
         </>
+      )}
+
+      {/* ─── Mobile AI Chat (overlay for small screens) ─── */}
+      {aiPanelOpen && (
+        <div className="fixed right-4 top-4 bottom-4 z-50 flex w-[340px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl lg:hidden">
+          <AiChatPanel />
+        </div>
       )}
     </div>
   );

@@ -56,6 +56,12 @@ interface FlowStepNodeProps {
   onRemove: () => void;
   onAddStep?: () => void;
   isLast: boolean;
+  /** Whether this step is currently selected/focused */
+  isSelected?: boolean;
+  /** Called when the step card is clicked to select it */
+  onSelect?: () => void;
+  /** Passed down so child steps can call their own select handlers */
+  onSelectChild?: (branchIndex: number, stepIndex: number) => void;
 }
 
 export function FlowStepNode({
@@ -67,6 +73,9 @@ export function FlowStepNode({
   onRemove,
   onAddStep,
   isLast,
+  isSelected,
+  onSelect,
+  onSelectChild,
 }: FlowStepNodeProps) {
   const laneColor = DEPTH_COLORS[depth % DEPTH_COLORS.length];
 
@@ -253,7 +262,19 @@ export function FlowStepNode({
       )}
 
       {/* Step Card */}
-      <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/20">
+      <div
+        onClick={(e) => {
+          // Don't trigger select when clicking inputs/selects/buttons inside the card
+          const tag = (e.target as HTMLElement).tagName;
+          if (['INPUT', 'SELECT', 'BUTTON', 'OPTION', 'TEXTAREA'].includes(tag)) return;
+          onSelect?.();
+        }}
+        className={`rounded-xl border bg-card p-4 transition-colors ${
+          isSelected
+            ? 'border-primary ring-2 ring-primary/30'
+            : 'border-border hover:border-primary/20'
+        } ${onSelect ? 'cursor-pointer' : ''}`}
+      >
         <div className="flex items-start gap-3">
           {/* Step Number */}
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
@@ -369,6 +390,7 @@ export function FlowStepNode({
                             }
                             onRemove={() => removeBranchStep(bIndex, sIndex)}
                             isLast={sIndex === branch.steps.length - 1}
+                            onSelect={onSelectChild ? () => onSelectChild(bIndex, sIndex) : undefined}
                           />
                         ))}
 

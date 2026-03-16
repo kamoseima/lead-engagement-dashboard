@@ -29,9 +29,17 @@ export interface CreateCampaignInput {
   config?: Record<string, unknown>;
 }
 
+export interface CampaignSendStats {
+  total_sends: number;
+  reached: number;   // sent + delivered + replied
+  failed: number;
+  pending: number;   // queued + pending
+}
+
 export interface CampaignWithCreator extends Campaign {
   creator_name: string | null;
   creator_email: string;
+  send_stats: CampaignSendStats;
 }
 
 export async function listCampaigns(orgId: string): Promise<StepResult<CampaignWithCreator[]>> {
@@ -45,6 +53,36 @@ export async function listCampaigns(orgId: string): Promise<StepResult<CampaignW
 
   if (error) return failure('INTERNAL_ERROR', error.message);
 
+  // Fetch send stats for all campaigns in one query (lightweight: only id, campaign_id, status)
+  const campaignIds = (data ?? []).map((r: Record<string, unknown>) => r.id as string);
+  const sendStatsMap: Record<string, CampaignSendStats> = {};
+
+  if (campaignIds.length > 0) {
+    const { data: sends } = await supabase
+      .from('campaign_sends')
+      .select('campaign_id, status')
+      .in('campaign_id', campaignIds);
+
+    // Aggregate send stats per campaign
+    for (const send of sends ?? []) {
+      const cid = send.campaign_id as string;
+      const status = send.status as string;
+      if (!sendStatsMap[cid]) {
+        sendStatsMap[cid] = { total_sends: 0, reached: 0, failed: 0, pending: 0 };
+      }
+      sendStatsMap[cid].total_sends++;
+      if (['sent', 'delivered', 'replied'].includes(status)) {
+        sendStatsMap[cid].reached++;
+      } else if (status === 'failed') {
+        sendStatsMap[cid].failed++;
+      } else {
+        sendStatsMap[cid].pending++;
+      }
+    }
+  }
+
+  const emptySendStats: CampaignSendStats = { total_sends: 0, reached: 0, failed: 0, pending: 0 };
+
   const campaigns = (data ?? []).map((row: Record<string, unknown>) => {
     const creator = row.creator as { display_name: string | null; email: string } | null;
     const { creator: _, ...campaign } = row;
@@ -52,6 +90,7 @@ export async function listCampaigns(orgId: string): Promise<StepResult<CampaignW
       ...campaign,
       creator_name: creator?.display_name ?? null,
       creator_email: creator?.email ?? '',
+      send_stats: sendStatsMap[campaign.id as string] ?? { ...emptySendStats },
     } as CampaignWithCreator;
   });
 
@@ -145,6 +184,36 @@ export async function createCampaign(
   return success(data as Campaign);
 }
 
+/**
+ * Stop a campaign — sets status to 'paused'. Works for scheduled or sending campaigns.
+ */
+export async function stopCampaign(campaignId: string): Promise<StepResult<Campaign>> {
+  const supabase = await createClient();
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('campaigns')
+    .select('status')
+    .eq('id', campaignId)
+    .single();
+
+  if (fetchError || !existing) return failure('NOT_FOUND', 'Campaign not found');
+
+  const stoppable = ['scheduled', 'sending'];
+  if (!stoppable.includes(existing.status)) {
+    return failure('VALIDATION_ERROR', `Cannot stop a campaign with status "${existing.status}"`);
+  }
+
+  const { data, error } = await supabase
+    .from('campaigns')
+    .update({ status: 'paused' })
+    .eq('id', campaignId)
+    .select()
+    .single();
+
+  if (error) return failure('INTERNAL_ERROR', error.message);
+  return success(data as Campaign);
+}
+
 export async function getCampaignSends(campaignId: string): Promise<StepResult<CampaignSend[]>> {
   const supabase = await createClient();
 
@@ -232,4 +301,73 @@ export async function sendCampaignMessage(
     .single();
 
   return success(updated as CampaignSend);
+}
+
+/**
+ * Resend/reschedule a campaign. Creates a new campaign cloned from the original,
+ * optionally with a new schedule date.
+ */
+export async function resendCampaign(
+  orgId: string,
+  userId: string,
+  campaignId: string,
+  newScheduleAt?: string,
+): Promise<StepResult<Campaign>> {
+  const originalResult = await getCampaign(campaignId);
+  if (!originalResult.success) return originalResult;
+
+  const original = originalResult.data;
+
+  const scheduleType = newScheduleAt ? 'once' : 'immediate';
+  const status = scheduleType === 'immediate' ? 'sending' : 'scheduled';
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('campaigns')
+    .insert({
+      org_id: orgId,
+      name: `${original.name} (resend)`,
+      description: original.description,
+      channel: original.channel,
+      flow_id: original.flow_id,
+      template_name: original.template_name,
+      status,
+      leads: original.leads,
+      schedule_at: newScheduleAt || null,
+      schedule_type: scheduleType,
+      send_mode: original.send_mode,
+      frequency: null,
+      frequency_interval: 1,
+      sends_per_day: 1,
+      send_times: [],
+      recurrence_end_at: null,
+      config: original.config,
+      created_by: userId,
+    })
+    .select()
+    .single();
+
+  if (error) return failure('INTERNAL_ERROR', error.message);
+
+  // For immediate resends with a template, fire sends right away
+  if (scheduleType === 'immediate' && original.template_name && original.config?.content_sid) {
+    await Promise.allSettled(
+      original.leads.map(lead =>
+        sendCampaignMessage(
+          orgId,
+          data.id,
+          lead,
+          original.template_name!,
+          original.config.content_sid as string,
+          (lead.variables as Record<string, string> | undefined) ?? {},
+        )
+      )
+    );
+    await supabase.from('campaigns').update({ status: 'completed' }).eq('id', data.id);
+    const { data: updated } = await supabase.from('campaigns').select('*').eq('id', data.id).single();
+    return success((updated ?? data) as Campaign);
+  }
+
+  return success(data as Campaign);
 }

@@ -56,6 +56,7 @@ export interface CampaignLead {
   name: string;
   surname?: string;
   phone: string;
+  email?: string;
   company?: string;
   variables?: Record<string, string>;
 }

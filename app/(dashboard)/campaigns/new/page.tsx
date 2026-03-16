@@ -26,6 +26,8 @@ import {
   Split,
   Minus,
   Plus,
+  MessageSquare,
+  Mail,
 } from 'lucide-react';
 import { StepIndicator } from '@/components/shared/step-indicator';
 import { ModeToggle, type ModeOption } from '@/components/shared/mode-toggle';
@@ -33,22 +35,32 @@ import { PhonePreview } from '@/components/shared/phone-preview';
 import { ButtonEditor } from '@/components/shared/button-editor';
 import { VariableEditor } from '@/components/shared/variable-editor';
 import type { Template, TemplateButton } from '@/services/templates/template.service';
-import type { Flow, ScheduleType, SendMode, Frequency } from '@/types/database';
+import type { CampaignChannel, Flow, ScheduleType, SendMode, Frequency } from '@/types/database';
 
 const STEPS = ['Message', 'Recipients', 'Schedule'];
 
 type MessageMode = 'template' | 'flow' | 'custom';
 type RecipientMode = 'all' | 'manual' | 'select';
 
-const MESSAGE_MODES: ModeOption[] = [
+const WHATSAPP_MESSAGE_MODES: ModeOption[] = [
   { value: 'template', label: 'Template', hint: 'Pick an approved template', icon: FileText },
   { value: 'flow', label: 'Flow', hint: 'Multi-step flow', icon: GitBranch },
   { value: 'custom', label: 'Custom', hint: 'Write a message', icon: Edit3 },
 ];
 
-const RECIPIENT_MODES: ModeOption[] = [
+const EMAIL_MESSAGE_MODES: ModeOption[] = [
+  { value: 'custom', label: 'Compose', hint: 'Write an email', icon: Edit3 },
+];
+
+const WHATSAPP_RECIPIENT_MODES: ModeOption[] = [
   { value: 'all', label: 'All Contacts', hint: 'Send to everyone', icon: Users },
   { value: 'manual', label: 'Enter Numbers', hint: 'Paste phone numbers', icon: Phone },
+  { value: 'select', label: 'Select Specific', hint: 'Choose contacts', icon: UserCheck },
+];
+
+const EMAIL_RECIPIENT_MODES: ModeOption[] = [
+  { value: 'all', label: 'All Contacts', hint: 'Send to everyone', icon: Users },
+  { value: 'manual', label: 'Enter Emails', hint: 'Paste email addresses', icon: Mail },
   { value: 'select', label: 'Select Specific', hint: 'Choose contacts', icon: UserCheck },
 ];
 
@@ -79,12 +91,16 @@ export default function NewCampaignPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Channel
+  const [channel, setChannel] = useState<CampaignChannel>('whatsapp');
+
   // Step 0: Message
   const [campaignName, setCampaignName] = useState('');
   const [messageMode, setMessageMode] = useState<MessageMode>('template');
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
   const [customBody, setCustomBody] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
   const [customButtons, setCustomButtons] = useState<TemplateButton[]>([]);
   const [variableNames, setVariableNames] = useState<Record<string, string>>({});
   const [templateSearch, setTemplateSearch] = useState('');
@@ -104,6 +120,19 @@ export default function NewCampaignPage() {
   const [sendTimes, setSendTimes] = useState<string[]>(['09:00']);
   const [endDate, setEndDate] = useState('');
   const [noEndDate, setNoEndDate] = useState(true);
+
+  // Derived mode options based on channel
+  const messageModes = channel === 'email' ? EMAIL_MESSAGE_MODES : WHATSAPP_MESSAGE_MODES;
+  const recipientModes = channel === 'email' ? EMAIL_RECIPIENT_MODES : WHATSAPP_RECIPIENT_MODES;
+
+  // Reset message mode when switching channel (email doesn't support template/flow)
+  useEffect(() => {
+    if (channel === 'email' && (messageMode === 'template' || messageMode === 'flow')) {
+      setMessageMode('custom');
+      setSelectedTemplate(null);
+      setSelectedFlow(null);
+    }
+  }, [channel, messageMode]);
 
   // Data
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -141,8 +170,12 @@ export default function NewCampaignPage() {
     [templates, templateSearch]
   );
 
-  // Parse manual numbers
-  const parsedNumbers = useMemo(() => {
+  // Validation helpers
+  const isValidPhone = (v: string) => /^\+?[1-9]\d{6,14}$/.test(v.replace(/[\s\-()]/g, ''));
+  const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
+  // Parse manual entries
+  const parsedEntries = useMemo(() => {
     if (!manualNumbers.trim()) return [];
     return manualNumbers
       .split(/[\n,;]+/)
@@ -150,9 +183,20 @@ export default function NewCampaignPage() {
       .filter((n) => n.length > 0);
   }, [manualNumbers]);
 
+  // Validated entries
+  const validEntries = useMemo(() => {
+    const validator = channel === 'email' ? isValidEmail : isValidPhone;
+    return parsedEntries.filter(validator);
+  }, [parsedEntries, channel]);
+
+  const invalidEntries = useMemo(() => {
+    const validator = channel === 'email' ? isValidEmail : isValidPhone;
+    return parsedEntries.filter(e => !validator(e));
+  }, [parsedEntries, channel]);
+
   // Recipient count
   const recipientCount =
-    recipientMode === 'manual' ? parsedNumbers.length : 0;
+    recipientMode === 'manual' ? validEntries.length : 0;
 
   // Preview body/buttons based on mode
   const previewBody =
@@ -186,10 +230,11 @@ export default function NewCampaignPage() {
       if (messageMode === 'template' && !selectedTemplate) return false;
       if (messageMode === 'flow' && !selectedFlow) return false;
       if (messageMode === 'custom' && !customBody) return false;
+      if (messageMode === 'custom' && channel === 'email' && !emailSubject) return false;
       return true;
     }
     if (currentStep === 1) {
-      if (recipientMode === 'manual' && parsedNumbers.length === 0)
+      if (recipientMode === 'manual' && validEntries.length === 0)
         return false;
       return true;
     }
@@ -206,14 +251,16 @@ export default function NewCampaignPage() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
 
-    const leads = parsedNumbers.map((phone) => ({
-      name: phone,
-      phone,
+    const leads = validEntries.map((entry) => ({
+      name: entry,
+      phone: channel === 'email' ? '' : entry,
+      email: channel === 'email' ? entry : undefined,
       variables: variableNames,
     }));
 
     const payload: Record<string, unknown> = {
       name: campaignName,
+      channel,
       leads,
     };
 
@@ -223,7 +270,11 @@ export default function NewCampaignPage() {
     } else if (messageMode === 'flow' && selectedFlow) {
       payload.flow_id = selectedFlow.id;
     } else if (messageMode === 'custom') {
-      payload.config = { custom_body: customBody, custom_buttons: customButtons };
+      payload.config = {
+        custom_body: customBody,
+        ...(channel === 'email' ? { email_subject: emailSubject } : {}),
+        ...(channel === 'whatsapp' ? { custom_buttons: customButtons } : {}),
+      };
     }
 
     payload.schedule_type = scheduleType;
@@ -294,6 +345,55 @@ export default function NewCampaignPage() {
           {/* ════════════ STEP 0: MESSAGE ════════════ */}
           {currentStep === 0 && (
             <>
+              {/* Channel Selector */}
+              <section className="space-y-3 rounded-xl border border-border bg-card p-5">
+                <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                  Campaign Channel
+                </h2>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setChannel('whatsapp')}
+                    className={`relative flex items-center gap-3 rounded-lg border p-3 transition-colors ${
+                      channel === 'whatsapp'
+                        ? 'border-green-500 bg-green-500/10'
+                        : 'border-border hover:border-green-500/30'
+                    }`}
+                  >
+                    {channel === 'whatsapp' && (
+                      <div className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-green-500">
+                        <Check className="h-2.5 w-2.5 text-white" />
+                      </div>
+                    )}
+                    <MessageSquare className={`h-5 w-5 ${channel === 'whatsapp' ? 'text-green-500' : 'text-muted-foreground'}`} />
+                    <div className="text-left">
+                      <span className={`text-xs font-medium ${channel === 'whatsapp' ? 'text-green-600 dark:text-green-400' : ''}`}>WhatsApp</span>
+                      <p className="text-[10px] text-muted-foreground">Templates &amp; flows</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChannel('email')}
+                    className={`relative flex items-center gap-3 rounded-lg border p-3 transition-colors ${
+                      channel === 'email'
+                        ? 'border-blue-500 bg-blue-500/10'
+                        : 'border-border hover:border-blue-500/30'
+                    }`}
+                  >
+                    {channel === 'email' && (
+                      <div className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500">
+                        <Check className="h-2.5 w-2.5 text-white" />
+                      </div>
+                    )}
+                    <Mail className={`h-5 w-5 ${channel === 'email' ? 'text-blue-500' : 'text-muted-foreground'}`} />
+                    <div className="text-left">
+                      <span className={`text-xs font-medium ${channel === 'email' ? 'text-blue-600 dark:text-blue-400' : ''}`}>Email</span>
+                      <p className="text-[10px] text-muted-foreground">Email campaigns</p>
+                    </div>
+                  </button>
+                </div>
+              </section>
+
               {/* Campaign Name */}
               <section className="space-y-3 rounded-xl border border-border bg-card p-5">
                 <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
@@ -313,7 +413,7 @@ export default function NewCampaignPage() {
                   Message Type
                 </h2>
                 <ModeToggle
-                  options={MESSAGE_MODES}
+                  options={messageModes}
                   value={messageMode}
                   onChange={(v) => setMessageMode(v as MessageMode)}
                 />
@@ -437,28 +537,53 @@ export default function NewCampaignPage() {
               {messageMode === 'custom' && (
                 <section className="space-y-3 rounded-xl border border-border bg-card p-5">
                   <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
-                    Custom Message
+                    {channel === 'email' ? 'Compose Email' : 'Custom Message'}
                   </h2>
+
+                  {/* Email subject line */}
+                  {channel === 'email' && (
+                    <div className="space-y-2">
+                      <Label className="text-xs">Subject Line</Label>
+                      <Input
+                        placeholder="e.g. Your exclusive fibre deal is waiting"
+                        value={emailSubject}
+                        onChange={(e) => setEmailSubject(e.target.value)}
+                        maxLength={200}
+                      />
+                      <p className="text-right text-[10px] text-muted-foreground">
+                        {emailSubject.length}/200
+                      </p>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
-                    <Label className="text-xs">Body</Label>
+                    <Label className="text-xs">
+                      {channel === 'email' ? 'Email Body' : 'Body'}
+                    </Label>
                     <Textarea
-                      placeholder={`Hi {{1}}, check out our latest offer!`}
+                      placeholder={channel === 'email'
+                        ? `Hi {{1}},\n\nWe have an exclusive fibre offer for you...\n\nBest regards,\nFibreCompare Team`
+                        : `Hi {{1}}, check out our latest offer!`}
                       value={customBody}
                       onChange={(e) => setCustomBody(e.target.value)}
-                      rows={4}
-                      maxLength={1024}
+                      rows={channel === 'email' ? 10 : 4}
+                      maxLength={channel === 'email' ? 10000 : 1024}
                     />
                     <p className="text-right text-[10px] text-muted-foreground">
-                      {customBody.length}/1024
+                      {customBody.length}/{channel === 'email' ? '10000' : '1024'}
                     </p>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Buttons (optional)</Label>
-                    <ButtonEditor
-                      buttons={customButtons}
-                      onChange={setCustomButtons}
-                    />
-                  </div>
+
+                  {/* Buttons — WhatsApp only */}
+                  {channel === 'whatsapp' && (
+                    <div className="space-y-2">
+                      <Label className="text-xs">Buttons (optional)</Label>
+                      <ButtonEditor
+                        buttons={customButtons}
+                        onChange={setCustomButtons}
+                      />
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -494,7 +619,7 @@ export default function NewCampaignPage() {
                   Recipient Selection
                 </h2>
                 <ModeToggle
-                  options={RECIPIENT_MODES}
+                  options={recipientModes}
                   value={recipientMode}
                   onChange={(v) => setRecipientMode(v as RecipientMode)}
                 />
@@ -503,21 +628,40 @@ export default function NewCampaignPage() {
               {recipientMode === 'manual' && (
                 <section className="space-y-3 rounded-xl border border-border bg-card p-5">
                   <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
-                    Phone Numbers
+                    {channel === 'email' ? 'Email Addresses' : 'Phone Numbers'}
                   </h2>
                   <Textarea
-                    placeholder={`+27821234567\n+27829876543\n+27831112222`}
+                    placeholder={channel === 'email'
+                      ? `john@example.com\njane@company.co.za\ninfo@business.com`
+                      : `+27821234567\n+27829876543\n+27831112222`}
                     value={manualNumbers}
                     onChange={(e) => setManualNumbers(e.target.value)}
                     rows={8}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Enter one number per line, or separate with commas.
-                    <span className="ml-2 font-medium text-foreground">
-                      {parsedNumbers.length} number
-                      {parsedNumbers.length !== 1 ? 's' : ''}
-                    </span>
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">
+                      Enter one {channel === 'email' ? 'email' : 'number'} per line, or separate with commas.
+                      <span className="ml-2 font-medium text-foreground">
+                        {validEntries.length} valid
+                      </span>
+                      {invalidEntries.length > 0 && (
+                        <span className="ml-1 font-medium text-red-500">
+                          · {invalidEntries.length} invalid
+                        </span>
+                      )}
+                    </p>
+                    {invalidEntries.length > 0 && (
+                      <div className="rounded-lg bg-red-500/10 px-3 py-2">
+                        <p className="text-[11px] font-medium text-red-500">
+                          Invalid {channel === 'email' ? 'emails' : 'numbers'} (will be skipped):
+                        </p>
+                        <p className="mt-0.5 font-mono text-[11px] text-red-400">
+                          {invalidEntries.slice(0, 5).join(', ')}
+                          {invalidEntries.length > 5 && ` +${invalidEntries.length - 5} more`}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </section>
               )}
 
@@ -533,8 +677,7 @@ export default function NewCampaignPage() {
               {recipientMode === 'select' && (
                 <section className="space-y-3 rounded-xl border border-border bg-card p-5">
                   <p className="text-xs text-muted-foreground">
-                    Contact selection is coming soon. For now, use &quot;Enter
-                    Numbers&quot; to paste specific phone numbers.
+                    Contact selection is coming soon. For now, use &quot;{channel === 'email' ? 'Enter Emails' : 'Enter Numbers'}&quot; to paste specific {channel === 'email' ? 'email addresses' : 'phone numbers'}.
                   </p>
                 </section>
               )}
@@ -799,6 +942,10 @@ export default function NewCampaignPage() {
                     <span className="font-medium">{campaignName}</span>
                   </div>
                   <div className="flex justify-between">
+                    <span className="text-muted-foreground">Channel</span>
+                    <span className="font-medium capitalize">{channel}</span>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="text-muted-foreground">Message</span>
                     <span className="font-medium">
                       {messageMode === 'template'
@@ -808,13 +955,19 @@ export default function NewCampaignPage() {
                           : 'Custom message'}
                     </span>
                   </div>
+                  {channel === 'email' && emailSubject && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Subject</span>
+                      <span className="max-w-[200px] truncate font-medium">{emailSubject}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Recipients</span>
                     <span className="font-medium">
                       {recipientMode === 'all'
                         ? 'All contacts'
                         : recipientMode === 'manual'
-                          ? `${parsedNumbers.length} numbers`
+                          ? `${validEntries.length} ${channel === 'email' ? 'emails' : 'numbers'}`
                           : 'Selected contacts'}
                     </span>
                   </div>
